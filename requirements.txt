@@ -1,0 +1,11 @@
+PyQt6==6.5.0
+torch>=2.2.0
+torchvision>=0.17.0
+transformers>=4.27.0
+faiss-cpu>=1.7.4
+Pillow>=9.5.0
+SQLAlchemy>=2.0.15
+fastapi>=0.95.2
+uvicorn>=0.22.0
+python-multipart>=0.0.6
+numpy>=1.24.0 
