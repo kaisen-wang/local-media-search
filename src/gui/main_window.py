@@ -8,7 +8,7 @@ from src.core.search_engine import SearchEngine
 import os
 from src.database.models import Session, MediaFile
 import concurrent.futures
-from src.config import CURRENT_OS
+from src.config import CURRENT_OS, WINDOW_TITLE, WINDOW_MIN_WIDTH, WINDOW_MIN_HEIGHT
 
 class IndexingWorker(QThread):
     """后台索引线程"""
@@ -96,21 +96,86 @@ class ImageLabel(QLabel):
             # 对于 Windows，使用：os.startfile(self.file_path)
             # 对于 MacOS，使用：os.system(f'open "{self.file_path}"')
 
+class RefreshWorker(QThread):
+    """后台刷新线程"""
+    progress = pyqtSignal(str, int, int)  # 当前文件夹，当前进度，总数
+    finished = pyqtSignal(dict)  # 完成信号，返回统计信息
+    error = pyqtSignal(str)  # 错误信号
+
+    def __init__(self, indexer, folders):
+        super().__init__()
+        self.indexer = indexer
+        self.folders = folders
+
+    def run(self):
+        try:
+            stats = {
+                'added': 0,    # 新增文件数
+                'updated': 0,  # 更新文件数
+                'removed': 0   # 删除文件数
+            }
+            
+            session = Session()
+            try:
+                for folder in self.folders:
+                    # 获取文件夹中的所有文件
+                    current_files = set(self.indexer.file_scanner.scan_directory(folder))
+                    
+                    # 获取数据库中该文件夹的所有文件
+                    db_files = set(
+                        path[0] for path in 
+                        session.query(MediaFile.file_path)
+                        .filter(MediaFile.file_path.like(f"{folder}%"))
+                        .all()
+                    )
+                    
+                    # 计算需要添加、删除的文件
+                    files_to_add = current_files - db_files
+                    files_to_remove = db_files - current_files
+                    
+                    # 删除不存在的文件记录
+                    for file_path in files_to_remove:
+                        session.query(MediaFile).filter_by(file_path=file_path).delete()
+                        stats['removed'] += 1
+                    
+                    # 添加新文件
+                    total_files = len(files_to_add)
+                    for i, file_path in enumerate(files_to_add, 1):
+                        if self.indexer.index_single_file(file_path):
+                            stats['added'] += 1
+                        self.progress.emit(folder, i, total_files)
+                    
+                    session.commit()
+                    
+                self.finished.emit(stats)
+                
+            finally:
+                session.close()
+                
+        except Exception as e:
+            self.error.emit(str(e))
+
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         print("Initializing MainWindow...")  # 调试信息
         
         try:
-            self.setWindowTitle("LocalMediaSearch")
-            self.setMinimumSize(800, 600)
+            self.setWindowTitle(WINDOW_TITLE)
+            self.setMinimumSize(WINDOW_MIN_WIDTH, WINDOW_MIN_HEIGHT)
             
             # 初始化核心组件
             self.indexer = Indexer()
             self.search_engine = SearchEngine()
             
+            # 添加已索引文件夹列表
+            self.indexed_folders = set()
+            
             # 设置UI
             self.setup_ui()
+            
+            # 从数据库加载已索引的文件夹
+            self.load_indexed_folders()
             
             # 初始化进度对话框
             self.progress_dialog = None
@@ -157,6 +222,20 @@ class MainWindow(QMainWindow):
         self.add_folder_btn.clicked.connect(self.add_index_folder)
         main_layout.addWidget(self.add_folder_btn)
         
+        # 创建按钮布局
+        buttons_layout = QHBoxLayout()
+        
+        # 保留原有的添加文件夹按钮
+        buttons_layout.addWidget(self.add_folder_btn)
+        
+        # 添加刷新按钮
+        self.refresh_btn = QPushButton("刷新索引")
+        self.refresh_btn.clicked.connect(self.refresh_indexes)
+        self.refresh_btn.setEnabled(False)  # 初始状态禁用
+        buttons_layout.addWidget(self.refresh_btn)
+        
+        main_layout.addLayout(buttons_layout)
+        
         # 创建滚动区域用于显示结果
         scroll_area = QScrollArea()
         scroll_area.setWidgetResizable(True)
@@ -173,6 +252,84 @@ class MainWindow(QMainWindow):
         
         print("UI setup complete")  # 调试信息
 
+    def load_indexed_folders(self):
+        """从数据库加载已索引的文件夹"""
+        session = Session()
+        try:
+            # 获取所有已索引文件的目录
+            folders = session.query(MediaFile.file_path).distinct().all()
+            for (file_path,) in folders:
+                folder = os.path.dirname(file_path)
+                self.indexed_folders.add(folder)
+            
+            # 如果有已索引的文件夹，启用刷新按钮
+            self.refresh_btn.setEnabled(len(self.indexed_folders) > 0)
+        finally:
+            session.close()
+
+    def refresh_indexes(self):
+        """刷新所有已索引文件夹"""
+        if not self.indexed_folders:
+            QMessageBox.information(self, "提示", "没有已索引的文件夹")
+            return
+            
+        reply = QMessageBox.question(
+            self,
+            '确认',
+            f'是否要刷新所有已索引文件夹？\n这将重新扫描所有文件夹中的变化。',
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
+        
+        if reply == QMessageBox.StandardButton.Yes:
+            # 创建进度对话框
+            self.progress_dialog = QProgressDialog(
+                "正在刷新索引...", 
+                "取消", 
+                0, 
+                len(self.indexed_folders), 
+                self
+            )
+            self.progress_dialog.setWindowModality(Qt.WindowModality.WindowModal)
+            self.progress_dialog.setAutoClose(True)
+            self.progress_dialog.setAutoReset(True)
+            
+            # 创建工作线程处理所有文件夹
+            self.refresh_worker = RefreshWorker(self.indexer, list(self.indexed_folders))
+            self.refresh_worker.progress.connect(self.update_refresh_progress)
+            self.refresh_worker.finished.connect(self.refresh_finished)
+            self.refresh_worker.error.connect(self.indexing_error)
+            
+            self.progress_dialog.show()
+            self.refresh_worker.start()
+
+    def update_refresh_progress(self, current_folder, current, total):
+        """更新刷新进度"""
+        if self.progress_dialog:
+            folder_name = os.path.basename(current_folder)
+            self.progress_dialog.setLabelText(
+                f"正在刷新文件夹: {folder_name}\n"
+                f"进度: {current}/{total}"
+            )
+            self.progress_dialog.setValue(current)
+
+    def refresh_finished(self, stats):
+        """刷新完成处理"""
+        if self.progress_dialog:
+            self.progress_dialog.close()
+            self.progress_dialog = None
+        
+        # 重建搜索索引
+        self.search_engine.build_index()
+        
+        # 显示结果统计
+        message = (
+            f"刷新完成\n"
+            f"新增文件：{stats['added']}\n"
+            f"更新文件：{stats['updated']}\n"
+            f"删除文件：{stats['removed']}"
+        )
+        QMessageBox.information(self, "完成", message)
+
     def add_index_folder(self):
         """添加索引文件夹"""
         folder = QFileDialog.getExistingDirectory(
@@ -183,6 +340,11 @@ class MainWindow(QMainWindow):
         )
         
         if folder:
+            # 添加到已索引文件夹集合
+            self.indexed_folders.add(folder)
+            # 启用刷新按钮
+            self.refresh_btn.setEnabled(True)
+            
             reply = QMessageBox.question(
                 self,
                 '确认',
