@@ -1,13 +1,13 @@
 from PyQt6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                            QPushButton, QLineEdit, QLabel, QFileDialog, QScrollArea, QMessageBox, QProgressDialog,
-                           QGridLayout)
+                           QSizePolicy)
 from PyQt6.QtCore import Qt, QSize, QThread, pyqtSignal
-from PyQt6.QtGui import QDragEnterEvent, QDropEvent, QPixmap, QImage
+from PyQt6.QtGui import QDragEnterEvent, QDropEvent, QPixmap, QImage, QIcon
 from src.core.indexer import Indexer
 from src.core.search_engine import SearchEngine
 import os
 import subprocess
-from src.database.models import Session, MediaFile
+from src.database.models import Session, MediaFile, VideoFrame
 import concurrent.futures
 from src.config import CURRENT_OS, WINDOW_TITLE, WINDOW_MIN_WIDTH, WINDOW_MIN_HEIGHT
 
@@ -193,14 +193,15 @@ class MainWindow(QMainWindow):
             raise
 
     def setup_ui(self):
-        print("Setting up UI...")  # 调试信息
-        
+        """优化的UI设置"""
         # 创建中心部件
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
         
         # 创建主布局
         main_layout = QVBoxLayout(central_widget)
+        main_layout.setSpacing(10)
+        main_layout.setContentsMargins(10, 10, 10, 10)
         
         # 搜索区域
         search_layout = QHBoxLayout()
@@ -208,50 +209,61 @@ class MainWindow(QMainWindow):
         # 创建搜索输入框
         self.search_input = QLineEdit()
         self.search_input.setPlaceholderText("输入搜索关键词...")
+        self.search_input.setMinimumWidth(300)
         self.search_input.returnPressed.connect(self.perform_text_search)
         search_layout.addWidget(self.search_input)
         
         # 创建图片搜索按钮
         self.image_search_btn = QPushButton("图片搜索")
+        self.image_search_btn.setIcon(QIcon.fromTheme("image-x-generic"))
         self.image_search_btn.clicked.connect(self.open_image_search)
         search_layout.addWidget(self.image_search_btn)
         
         main_layout.addLayout(search_layout)
         
+        # 工具栏区域
+        toolbar_layout = QHBoxLayout()
+        
         # 添加文件夹按钮
         self.add_folder_btn = QPushButton("添加索引文件夹")
+        self.add_folder_btn.setIcon(QIcon.fromTheme("folder-new"))
         self.add_folder_btn.clicked.connect(self.add_index_folder)
-        main_layout.addWidget(self.add_folder_btn)
+        toolbar_layout.addWidget(self.add_folder_btn)
         
-        # 创建按钮布局
-        buttons_layout = QHBoxLayout()
-        
-        # 保留原有的添加文件夹按钮
-        buttons_layout.addWidget(self.add_folder_btn)
-        
-        # 添加刷新按钮
+        # 刷新按钮
         self.refresh_btn = QPushButton("刷新索引")
+        self.refresh_btn.setIcon(QIcon.fromTheme("view-refresh"))
         self.refresh_btn.clicked.connect(self.refresh_indexes)
-        self.refresh_btn.setEnabled(False)  # 初始状态禁用
-        buttons_layout.addWidget(self.refresh_btn)
+        self.refresh_btn.setEnabled(False) # 初始状态禁用
+        toolbar_layout.addWidget(self.refresh_btn)
         
-        main_layout.addLayout(buttons_layout)
+        # 添加弹性空间
+        toolbar_layout.addStretch()
         
-        # 创建滚动区域用于显示结果
-        scroll_area = QScrollArea()
-        scroll_area.setWidgetResizable(True)
+        main_layout.addLayout(toolbar_layout)
         
         # 创建结果显示区域
+        self.create_results_area()
+        
+        # 状态栏
+        self.statusBar().showMessage("就绪")
+
+    def create_results_area(self):
+        """创建优化的结果显示区域"""
+        # 创建滚动区域
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        
+        # 创建结果容器
         self.results_widget = QWidget()
         self.results_layout = QVBoxLayout(self.results_widget)
+        self.results_layout.setSpacing(10)
+        self.results_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
         
         scroll_area.setWidget(self.results_widget)
-        main_layout.addWidget(scroll_area)
-        
-        # 添加状态栏
-        self.statusBar().showMessage("就绪")
-        
-        print("UI setup complete")  # 调试信息
+        self.centralWidget().layout().addWidget(scroll_area)
 
     def load_indexed_folders(self):
         """从数据库加载已索引的文件夹"""
@@ -333,52 +345,41 @@ class MainWindow(QMainWindow):
 
     def add_index_folder(self):
         """添加索引文件夹"""
-        folder = QFileDialog.getExistingDirectory(
-            self,
-            "选择要索引的文件夹",
-            "",
-            QFileDialog.Option.ShowDirsOnly
-        )
-        
+        folder = QFileDialog.getExistingDirectory(self, "选择文件夹")
         if folder:
-            # 添加到已索引文件夹集合
-            self.indexed_folders.add(folder)
             # 启用刷新按钮
             self.refresh_btn.setEnabled(True)
-            
-            reply = QMessageBox.question(
-                self,
-                '确认',
-                f'是否索引文件夹 {folder}？这可能需要一些时间。',
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+            # 显示进度对话框
+            self.progress_dialog = QProgressDialog(
+                "正在索引文件...", 
+                "取消", 
+                0, 
+                100, 
+                self
             )
+            self.progress_dialog.setWindowModality(Qt.WindowModality.WindowModal)
+            self.progress_dialog.setAutoClose(True)
+            self.progress_dialog.setAutoReset(True)
             
-            if reply == QMessageBox.StandardButton.Yes:
-                # 创建进度对话框
-                self.progress_dialog = QProgressDialog(
-                    "正在扫描文件...", 
-                    "取消", 
-                    0, 
-                    100, 
-                    self
-                )
-                self.progress_dialog.setWindowModality(Qt.WindowModality.WindowModal)
-                self.progress_dialog.setAutoClose(True)
-                self.progress_dialog.setAutoReset(True)
-                
-                # 创建并启动工作线程
-                self.worker = IndexingWorker(self.indexer, folder)
-                self.worker.progress.connect(self.update_progress)
-                self.worker.finished.connect(self.indexing_finished)
-                self.worker.error.connect(self.indexing_error)
-                
-                # 显示进度对话框
-                self.progress_dialog.show()
-                
-                # 启动工作线程
-                self.worker.start()
+            # 创建索引线程
+            self.index_worker = IndexingWorker(self.indexer, folder)
+            self.index_worker.progress.connect(self.update_index_progress)
+            self.index_worker.finished.connect(self.indexing_finished)
+            self.index_worker.error.connect(self.indexing_error)
+            
+            # 清空数据库中的旧索引（可选）
+            session = Session()
+            try:
+                session.query(MediaFile).delete()
+                session.query(VideoFrame).delete()
+                session.commit()
+            finally:
+                session.close()
+            
+            self.progress_dialog.show()
+            self.index_worker.start()
 
-    def update_progress(self, current, total):
+    def update_index_progress(self, current, total):
         """更新进度对话框"""
         if self.progress_dialog:
             progress = int((current / total) * 100)
@@ -466,7 +467,7 @@ class MainWindow(QMainWindow):
                 self.statusBar().showMessage("搜索失败", 5000)
 
     def display_results(self, results):
-        """显示搜索结果"""
+        """优化的结果显示方法"""
         # 清除现有结果
         for i in reversed(range(self.results_layout.count())): 
             widget = self.results_layout.itemAt(i).widget()
@@ -476,95 +477,117 @@ class MainWindow(QMainWindow):
         if not results:
             no_results_label = QLabel("没有找到匹配的结果")
             no_results_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            no_results_label.setStyleSheet("color: gray; padding: 20px;")
             self.results_layout.addWidget(no_results_label)
             return
-
-        # 创建列表布局
-        list_widget = QWidget()
-        list_layout = QVBoxLayout(list_widget)
-        list_layout.setSpacing(10)
 
         session = Session()
         try:
             for file_id, similarity, result_type, frame in results:
                 media_file = session.query(MediaFile).get(file_id)
                 if media_file and os.path.exists(media_file.file_path):
-                    # 创建单行结果容器
-                    row_widget = QWidget()
-                    row_layout = QHBoxLayout(row_widget)
-                    
-                    # 缩略图
-                    if result_type == 'image':
-                        thumbnail_path = media_file.file_path
-                    else:  # video
-                        thumbnail_path = frame.frame_path
-                        
-                    thumbnail = QLabel()
-                    pixmap = QPixmap(thumbnail_path)
-                    if not pixmap.isNull():
-                        scaled_pixmap = pixmap.scaled(100, 100,
-                            Qt.AspectRatioMode.KeepAspectRatio,
-                            Qt.TransformationMode.SmoothTransformation
-                        )
-                        thumbnail.setPixmap(scaled_pixmap)
-                    thumbnail.setFixedSize(100, 100)
-                    row_layout.addWidget(thumbnail)
-
-                    # 文件信息
-                    info_widget = QWidget()
-                    info_layout = QVBoxLayout(info_widget)
-                    
-                    # 文件名和类型
-                    filename = os.path.basename(media_file.file_path)
-                    type_text = "视频" if result_type == 'video' else "图片"
-                    name_label = QLabel(f"{filename} ({type_text})")
-                    name_label.setStyleSheet("font-weight: bold;")
-                    info_layout.addWidget(name_label)
-                    
-                    # 对于视频，显示时间戳
-                    if result_type == 'video':
-                        timestamp = frame.timestamp
-                        time_label = QLabel(f"时间: {timestamp:.2f}秒")
-                        info_layout.addWidget(time_label)
-                    
-                    # 文件路径
-                    path_label = QLabel(media_file.file_path)
-                    path_label.setStyleSheet("color: gray;")
-                    path_label.setToolTip(media_file.file_path)
-                    path_label.setMaximumWidth(400)
-                    info_layout.addWidget(path_label)
-                    
-                    row_layout.addWidget(info_widget)
-
-                    # 操作按钮
-                    if result_type == 'video':
-                        # 添加跳转到指定时间的按钮
-                        play_btn = QPushButton("播放视频片段")
-                        play_btn.clicked.connect(
-                            lambda checked, path=media_file.file_path, time=frame.timestamp:
-                            self.play_video_at_timestamp(path, time)
-                        )
-                        row_layout.addWidget(play_btn)
-                    
-                    open_folder_btn = QPushButton("打开所在文件夹")
-                    open_folder_btn.clicked.connect(
-                        lambda checked, path=media_file.file_path: self._open_folder(path)
+                    # 创建结果卡片
+                    result_card = self.create_result_card(
+                        media_file, similarity, result_type, frame
                     )
-                    row_layout.addWidget(open_folder_btn)
+                    self.results_layout.addWidget(result_card)
 
-                    list_layout.addWidget(row_widget)
-
-            # 添加列表到主布局
-            self.results_layout.addWidget(list_widget)
-            # 添加弹性空间
-            self.results_layout.addStretch()
-
-        except Exception as e:
-            error_label = QLabel(f"显示结果时发生错误: {str(e)}")
-            self.results_layout.addWidget(error_label)
-            
         finally:
             session.close()
+
+    def create_result_card(self, media_file, similarity, result_type, frame):
+        """创建单个结果卡片"""
+        card = QWidget()
+        card.setStyleSheet("""
+            QWidget {
+                padding: 10px;
+                border: 1px solid #ddd;
+                border-radius: 5px;
+            }
+            QWidget:hover {
+                border-color: #999;
+            }
+        """)
+        
+        layout = QHBoxLayout(card)
+        layout.setContentsMargins(10, 10, 10, 10)
+        
+        # 缩略图
+        if result_type == 'image':
+            thumbnail_path = media_file.file_path
+        else:
+            thumbnail_path = frame.frame_path
+            
+        thumbnail = QLabel()
+        pixmap = QPixmap(thumbnail_path)
+        if not pixmap.isNull():
+            scaled_pixmap = pixmap.scaled(
+                150, 150,
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation
+            )
+            thumbnail.setPixmap(scaled_pixmap)
+        thumbnail.setFixedSize(150, 150)
+        layout.addWidget(thumbnail)
+        
+        # 信息区域
+        info_widget = QWidget()
+        info_layout = QVBoxLayout(info_widget)
+        
+        # 文件名和类型
+        filename = os.path.basename(media_file.file_path)
+        type_text = "视频" if result_type == 'video' else "图片"
+        name_label = QLabel(f"{filename} ({type_text})")
+        name_label.setStyleSheet("font-weight: bold;")
+        info_layout.addWidget(name_label)
+        
+        # 相似度
+        similarity_label = QLabel(f"相似度: {similarity:.2%}")
+        # similarity_label.setStyleSheet("color: #666;")
+        info_layout.addWidget(similarity_label)
+        
+        # 视频时间戳
+        if result_type == 'video':
+            timestamp = frame.timestamp
+            time_label = QLabel(f"时间: {timestamp:.2f}秒")
+            # time_label.setStyleSheet("color: #666;")
+            info_layout.addWidget(time_label)
+        
+        # 文件路径
+        path_label = QLabel(media_file.file_path)
+        # path_label.setStyleSheet("color: gray;")
+        path_label.setToolTip(media_file.file_path)
+        # path_label.setMaximumWidth(400)
+        # 超出部分隐藏鼠标移入显示全部
+        path_label.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
+        path_label.setWordWrap(True)
+        info_layout.addWidget(path_label)
+        
+        layout.addWidget(info_widget, stretch=1)
+        
+        # 操作按钮
+        buttons_widget = QWidget()
+        buttons_layout = QVBoxLayout(buttons_widget)
+        buttons_layout.setSpacing(5)
+        
+        if result_type == 'video':
+            play_btn = QPushButton("播放片段")
+            play_btn.setIcon(QIcon.fromTheme("media-playback-start"))
+            play_btn.clicked.connect(
+                lambda: self.play_video_at_timestamp(media_file.file_path, frame.timestamp)
+            )
+            buttons_layout.addWidget(play_btn)
+        
+        open_folder_btn = QPushButton("打开文件夹")
+        open_folder_btn.setIcon(QIcon.fromTheme("folder"))
+        open_folder_btn.clicked.connect(
+            lambda: self._open_folder(media_file.file_path)
+        )
+        buttons_layout.addWidget(open_folder_btn)
+        
+        layout.addWidget(buttons_widget)
+        
+        return card
     
     def _open_folder(self, path):
         print(f"Opening folder for: {path}")

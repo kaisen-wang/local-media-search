@@ -1,6 +1,7 @@
 from src.core.file_scanner import FileScanner
 from src.core.feature_extractor import FeatureExtractor
 from src.database.models import Session, MediaFile, VideoFrame
+from src.config import CACHE_DIR
 from typing import List, Dict
 import numpy as np
 import concurrent.futures
@@ -105,7 +106,7 @@ class Indexer:
                 successful_frames = 0
                 
                 # 创建帧保存目录
-                frames_dir = os.path.join('data', 'video_frames', str(media_file.id))
+                frames_dir = os.path.join(CACHE_DIR, 'video_frames', str(media_file.id))
                 os.makedirs(frames_dir, exist_ok=True)
 
                 while True:
