@@ -1,103 +1,110 @@
 import sys
 import os
 from cx_Freeze import setup, Executable
+import platform
 
 # 增加递归限制
 sys.setrecursionlimit(5000)
 
-# 依赖包配置
+# 获取当前系统
+SYSTEM = platform.system().lower()
+
+# 基础依赖包配置
 build_exe_options = {
     "packages": [
         # 基础包
-        "os",
-        "sys",
-        "json",
-        "datetime",
-        
+        "os", "sys", "json", "datetime",
         # UI相关
         "PyQt6",
-        
         # 数据处理相关
         "numpy",
-        
         # 数据库相关
         "sqlalchemy",
-        
         # 图像处理相关
-        "PIL",
-        "cv2",
-        
+        "PIL", "cv2",
         # AI模型相关
-        "torch",
-        "transformers",
-        "tensorflow",
+        "torch", "transformers", "tensorflow",
     ],
-    
-    # 排除不需要的包
     "excludes": [
-        "tkinter",
-        "unittest",
-        "email",
-        "http",
-        "xml",
+        "tkinter", "unittest", "email", "http", "xml",
     ],
-    
-    # 添加额外文件和资源
     "include_files": [
-        ("src/config.py", "config.py"),  # 配置文件
-        ("models", "models"),       # 资源文件夹
+        ("src/config.py", "config.py"),
+        ("models", "models"),
     ],
-    
-    # 其他选项
     "include_msvcr": True,
     "zip_include_packages": "*",
     "zip_exclude_packages": "",
     "optimize": 2,
-    "build_exe": "dist/LocalMediaSearch",  # 指定输出目录
 }
 
-# 创建requirements.txt文件内容
-requirements = """
-# UI
-PyQt6>=6.5.0
-
-# 数据处理
-numpy>=1.24.0 
-pandas>=1.3.0
-
-# 数据库
-SQLAlchemy>=2.0.15
-
-# 图像处理
-Pillow>=9.5.0
-opencv-python>=4.5.0
-
-# AI模型
-torch>=2.2.0
-transformers>=4.27.0
-tensorflow>=2.8.0
-
-# 开发工具
-cx-Freeze>=6.10.0
-"""
-
-# 写入requirements.txt
-with open("requirements.txt", "w", encoding="utf-8") as f:
-    f.write(requirements.strip())
-
-# 如果是Windows系统，添加必要的DLL
-if sys.platform == "win32":
+# 平台特定配置
+if SYSTEM == "windows":
+    build_exe_options.update({
+        "build_exe": "dist/windows/LocalMediaSearch",
+        "include_files": build_exe_options["include_files"] + [
+            ("resources/logo.ico", "logo.ico"),
+        ]
+    })
+    if hasattr(sys, 'real_prefix'):  # 检查是否在虚拟环境中
+        PYTHON_INSTALL_DIR = sys.real_prefix
+    else:
+        PYTHON_INSTALL_DIR = sys.base_prefix
+    
     os.environ['TCL_LIBRARY'] = os.path.join(PYTHON_INSTALL_DIR, 'tcl', 'tcl8.6')
     os.environ['TK_LIBRARY'] = os.path.join(PYTHON_INSTALL_DIR, 'tcl', 'tk8.6')
-    build_exe_options['include_files'] += [
-        (os.path.join(PYTHON_INSTALL_DIR, 'DLLs', 'tk86t.dll'), 'tk86t.dll'),
-        (os.path.join(PYTHON_INSTALL_DIR, 'DLLs', 'tcl86t.dll'), 'tcl86t.dll'),
-    ]
+    
+elif SYSTEM == "darwin":
+    build_exe_options.update({
+        "build_exe": "dist/macos/LocalMediaSearch.app/Contents/MacOS",
+        "include_files": build_exe_options["include_files"] + [
+            ("resources/logo.icns", "logo.icns"),
+        ]
+    })
+elif SYSTEM == "linux":
+    build_exe_options.update({
+        "build_exe": "dist/linux/LocalMediaSearch",
+        "include_files": build_exe_options["include_files"] + [
+            ("debian/LocalMediaSearch.desktop", "LocalMediaSearch.desktop"),
+        ]
+    })
 
 # 目标执行文件配置
 base = None
-if sys.platform == "win32":
-    base = "Win32GUI"  # 使用Windows GUI子系统
+if SYSTEM == "windows":
+    base = "Win32GUI"
+
+# 平台特定的可执行文件配置
+executables = []
+if SYSTEM == "windows":
+    executables.append(
+        Executable(
+            "main.py",
+            base=base,
+            target_name="LocalMediaSearch.exe",
+            icon="resources/logo.ico",
+            shortcut_name="本地媒体搜索",
+            shortcut_dir="DesktopFolder"
+        )
+    )
+elif SYSTEM == "darwin":
+    executables.append(
+        Executable(
+            "main.py",
+            base=base,
+            target_name="LocalMediaSearch",
+            icon="resources/logo.icns"
+        )
+    )
+else:  # Linux
+    executables.append(
+        Executable(
+            "main.py",
+            base=base,
+            target_name="LocalMediaSearch",
+            icon="resources/logo.jpeg"
+        )
+    )
 
 setup(
     name="LocalMediaSearch",
@@ -106,14 +113,5 @@ setup(
     author="Carson",
     author_email="zmlmfok@qq.com",
     options={"build_exe": build_exe_options},
-    executables=[
-        Executable(
-            "main.py",
-            base=base,
-            target_name="LocalMediaSearch.exe",
-            icon="logo.ico",
-            shortcut_name="本地媒体搜索",
-            shortcut_dir="DesktopFolder"
-        )
-    ]
+    executables=executables
 )

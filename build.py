@@ -1,86 +1,90 @@
+#!/usr/bin/env python3
 import os
-import shutil
-import subprocess
 import sys
+import platform
+import subprocess
+import shutil
 
-def clean_build():
-    """清理构建目录"""
-    print("Cleaning build directories...")
-    dirs_to_clean = ['build', 'dist']
-    for dir_name in dirs_to_clean:
-        if os.path.exists(dir_name):
-            shutil.rmtree(dir_name)
-            print(f"Cleaned {dir_name}/")
+SYSTEM = platform.system().lower()
 
-def create_directories():
-    """创建必要的目录"""
-    print("Creating necessary directories...")
-    dirs_to_create = ['logs']
-    for dir_name in dirs_to_create:
-        os.makedirs(dir_name, exist_ok=True)
-        print(f"Created {dir_name}/")
+def install_requirements():
+    """安装依赖包"""
+    subprocess.run([sys.executable, "-m", "pip", "install", "-r", "requirements.txt"])
 
-def copy_resources():
-    """复制资源文件"""
-    print("Copying resource files...")
-    # 复制配置文件
-    if os.path.exists('config.ini'):
-        shutil.copy2('config.ini', 'dist/')
+def build_windows():
+    """Windows打包"""
+    print("正在构建Windows安装包...")
+    # 使用cx_Freeze构建
+    subprocess.run([sys.executable, "setup.py", "build"])
     
-    # 复制其他必要文件
-    resources = [
-        ('README.md', 'dist/'),
-        ('LICENSE', 'dist/'),
-    ]
+    # 使用NSIS创建安装程序
+    if os.path.exists("installer.nsi"):
+        subprocess.run(["makensis", "installer.nsi"])
     
-    for src, dst in resources:
-        if os.path.exists(src):
-            shutil.copy2(src, dst)
-            print(f"Copied {src} to {dst}")
+    print("Windows安装包构建完成！")
 
-def build_executable():
-    """构建可执行文件"""
-    print("Building executable...")
-    try:
-        subprocess.run([sys.executable, 'setup.py', 'build_exe'], check=True)
-        print("Build successful!")
-    except subprocess.CalledProcessError as e:
-        print(f"Build failed: {e}")
-        sys.exit(1)
-
-def create_launcher():
-    """创建启动器脚本"""
-    print("Creating launcher script...")
-    launcher_script = """@echo off
-echo Starting Image Text Search System...
-start LocalMediaSearch.exe
-"""
+def build_macos():
+    """macOS打包"""
+    print("正在构建macOS安装包...")
+    # 使用cx_Freeze构建
+    subprocess.run([sys.executable, "setup.py", "build"])
     
-    with open('dist/start.bat', 'w') as f:
-        f.write(launcher_script)
+    # 创建DMG
+    app_path = "dist/macos/LocalMediaSearch.app"
+    dmg_path = "dist/LocalMediaSearch.dmg"
+    
+    if os.path.exists(app_path):
+        subprocess.run([
+            "hdiutil", "create", "-volname", "LocalMediaSearch",
+            "-srcfolder", app_path, "-ov", "-format", "UDZO", dmg_path
+        ])
+    
+    print("macOS安装包构建完成！")
+
+def build_linux():
+    """Linux打包"""
+    print("正在构建Linux安装包...")
+    
+    # 创建必要的目录
+    os.makedirs("debian/LocalMediaSearch/usr/lib/LocalMediaSearch", exist_ok=True)
+    os.makedirs("debian/LocalMediaSearch/usr/share/applications", exist_ok=True)
+    
+    # 使用cx_Freeze构建
+    subprocess.run([sys.executable, "setup.py", "build"])
+    
+    # 复制文件到debian目录
+    shutil.copytree(
+        "dist/linux/LocalMediaSearch",
+        "debian/LocalMediaSearch/usr/lib/LocalMediaSearch",
+        dirs_exist_ok=True
+    )
+    
+    # 复制desktop文件
+    shutil.copy2(
+        "debian/LocalMediaSearch.desktop",
+        "debian/LocalMediaSearch/usr/share/applications/"
+    )
+    
+    # 构建deb包
+    subprocess.run(["dpkg-buildpackage", "-b", "-us", "-uc"])
+    
+    print("Linux安装包构建完成！")
 
 def main():
-    """主打包流程"""
-    print("=== Starting build process ===")
+    """主函数"""
+    # 安装依赖
+    install_requirements()
     
-    # 1. 清理旧的构建文件
-    clean_build()
-    
-    # 2. 创建必要的目录
-    create_directories()
-    
-    # 3. 构建可执行文件
-    build_executable()
-    
-    # 4. 复制资源文件
-    copy_resources()
-    
-    # 5. 创建启动器
-    create_launcher()
-    
-    print("\n=== Build completed successfully! ===")
-    print("The executable can be found in the 'dist' directory.")
-    print("Run 'start.bat' to launch the application.")
+    # 根据系统选择打包方式
+    if SYSTEM == "windows":
+        build_windows()
+    elif SYSTEM == "darwin":
+        build_macos()
+    elif SYSTEM == "linux":
+        build_linux()
+    else:
+        print(f"不支持的操作系统: {SYSTEM}")
+        sys.exit(1)
 
 if __name__ == "__main__":
     main() 

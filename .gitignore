@@ -3,6 +3,7 @@ data/
 dist/
 logs/
 models/
+*/*/LocalMediaSearch
 */*/__pycache__
 */*/*.pyc
 */*/*.pyo

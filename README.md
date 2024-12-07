@@ -151,3 +151,23 @@ python-multipart>=0.0.6
 numpy>=1.24.0 
 ```
 
+# 安装说明
+
+## Windows
+1. 下载 LocalMediaSearch-Setup.exe
+2. 双击运行安装程序
+3. 按照向导完成安装
+
+## macOS
+1. 下载 LocalMediaSearch.dmg
+2. 双击打开DMG文件
+3. 将应用程序拖入Applications文件夹
+
+## Ubuntu/Debian
+1. 下载 localmediasearch_1.0.0_amd64.deb
+2. 双击使用软件中心安装
+   或使用命令行：
+   ```bash
+   sudo dpkg -i localmediasearch_1.0.0_amd64.deb
+   sudo apt-get install -f  # 安装依赖
+   ```

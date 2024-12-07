@@ -1,0 +1,13 @@
+Source: LocalMediaSearch
+Section: utils
+Priority: optional
+Maintainer: Carson <zmlmfok@qq.com>
+Build-Depends: debhelper (>= 9), python3 (>= 3.8)
+Standards-Version: 4.5.0
+
+Package: LocalMediaSearch
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, python3 (>= 3.8)
+Description: 本地媒体智能搜索工具
+ 一个基于AI的本地媒体文件搜索工具，
+ 支持图片、视频等多媒体文件的智能搜索。 
