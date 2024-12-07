@@ -1,8 +1,7 @@
 from PyQt6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-                           QPushButton, QLineEdit, QLabel, QFileDialog, QScrollArea, QMessageBox, QProgressDialog,
-                           QSizePolicy)
-from PyQt6.QtCore import Qt, QSize, QThread, pyqtSignal
-from PyQt6.QtGui import QDragEnterEvent, QDropEvent, QPixmap, QImage, QIcon
+                           QPushButton, QLineEdit, QLabel, QFileDialog, QScrollArea, QMessageBox, QProgressDialog)
+from PyQt6.QtCore import Qt, QThread, pyqtSignal
+from PyQt6.QtGui import QPixmap, QIcon, QGuiApplication
 from src.core.indexer import Indexer
 from src.core.search_engine import SearchEngine
 import os
@@ -10,6 +9,7 @@ import subprocess
 from src.database.models import Session, MediaFile, VideoFrame
 import concurrent.futures
 from src.config import CURRENT_OS, WINDOW_TITLE, WINDOW_MIN_WIDTH, WINDOW_MIN_HEIGHT
+import traceback
 
 class IndexingWorker(QThread):
     """后台索引线程"""
@@ -157,13 +157,14 @@ class RefreshWorker(QThread):
             self.error.emit(str(e))
 
 class MainWindow(QMainWindow):
-    def __init__(self):
-        super().__init__()
-        print("Initializing MainWindow...")  # 调试信息
+    def __init__(self, parent=None):
+        super(MainWindow, self).__init__(parent)
         
         try:
+            # self.setMinimumSize(WINDOW_MIN_WIDTH, WINDOW_MIN_HEIGHT)
+            self.resize(WINDOW_MIN_WIDTH, WINDOW_MIN_HEIGHT)
             self.setWindowTitle(WINDOW_TITLE)
-            self.setMinimumSize(WINDOW_MIN_WIDTH, WINDOW_MIN_HEIGHT)
+            self.setCenter()
             
             # 初始化核心组件
             self.indexer = Indexer()
@@ -178,11 +179,11 @@ class MainWindow(QMainWindow):
             # 从数据库加载已索引的文件夹
             self.load_indexed_folders()
             
+            # 自动重建索引
+            self.rebuild_search_index()
+            
             # 初始化进度对话框
             self.progress_dialog = None
-            
-            print("MainWindow initialization complete")  # 调试信息
-            
         except Exception as e:
             print(f"Error in MainWindow initialization: {str(e)}")  # 调试信息
             QMessageBox.critical(
@@ -191,6 +192,11 @@ class MainWindow(QMainWindow):
                 f"窗口初始化失败：{str(e)}"
             )
             raise
+    
+    def setCenter(self):
+        screen = QGuiApplication.primaryScreen().size()
+        size = self.geometry()
+        self.move(int((screen.width() - size.width()) / 2), int((screen.height() - size.height()) / 2))
 
     def setup_ui(self):
         """优化的UI设置"""
@@ -342,6 +348,61 @@ class MainWindow(QMainWindow):
             f"删除文件：{stats['removed']}"
         )
         QMessageBox.information(self, "完成", message)
+        
+    def rebuild_search_index(self):
+        """重建搜索索引"""
+        try:
+            print("\n=== Rebuilding search index on startup ===")
+            # 显示加载对话框
+            self.loading_dialog = QProgressDialog(
+                "正在加载搜索索引...", 
+                None,  # 不显示取消按钮
+                0, 
+                0,  # 不确定进度
+                self
+            )
+            self.loading_dialog.setWindowModality(Qt.WindowModality.WindowModal)
+            self.loading_dialog.setAutoClose(True)
+            self.loading_dialog.setCancelButton(None)  # 禁用取消按钮
+            self.loading_dialog.show()
+            
+            # 验证数据库
+            self.search_engine.verify_database()
+            
+            # 重建搜索索引
+            self.search_engine.build_index()
+            
+            # 关闭加载对话框
+            self.loading_dialog.close()
+            
+            # 更新状态栏
+            self.statusBar().showMessage(f"搜索索引加载完成")
+            
+        except Exception as e:
+            print(f"Error rebuilding search index: {str(e)}")
+            traceback.print_exc()
+            QMessageBox.warning(self, "错误", "搜索索引重建失败，请重新运行程序")
+            
+    def indexing_finished(self, stats: dict):
+        """索引完成处理"""
+        if hasattr(self, 'progress_dialog') and self.progress_dialog:
+            self.progress_dialog.close()
+        
+        # 验证数据库
+        self.search_engine.verify_database()
+        
+        # 重建搜索索引
+        self.search_engine.build_index()
+        
+        # 显示统计信息
+        message = (
+            f"索引完成！\n"
+            f"处理文件：{stats['processed']}\n"
+            f"成功索引：{stats['success']}\n"
+            f"失败文件：{stats['failed']}\n"
+            f"删除文件：{stats['removed']}"
+        )
+        QMessageBox.information(self, "完成", message)
 
     def add_index_folder(self):
         """添加索引文件夹"""
@@ -388,26 +449,18 @@ class MainWindow(QMainWindow):
             )
             self.progress_dialog.setValue(progress)
 
-    def indexing_finished(self, indexed_files):
+    def indexing_finished(self):
         """索引完成处理"""
         if self.progress_dialog:
             self.progress_dialog.close()
-            self.progress_dialog = None
-
+        
+        # 验证数据库
+        self.search_engine.verify_database()
+        
         # 重建搜索索引
-        if indexed_files:
-            self.search_engine.build_index()
-            QMessageBox.information(
-                self,
-                "完成",
-                f"索引完成，共处理 {len(indexed_files)} 个文件"
-            )
-        else:
-            QMessageBox.information(
-                self,
-                "完成",
-                "没有新的文件需要索引"
-            )
+        self.search_engine.build_index()
+        
+        QMessageBox.information(self, "完成", "索引建立完成！")
 
     def indexing_error(self, error_msg):
         """索引错误处理"""
@@ -498,6 +551,8 @@ class MainWindow(QMainWindow):
     def create_result_card(self, media_file, similarity, result_type, frame):
         """创建单个结果卡片"""
         card = QWidget()
+        # 设置宽度
+        card.setFixedWidth(WINDOW_MIN_WIDTH - 60)
         card.setStyleSheet("""
             QWidget {
                 padding: 10px;
@@ -559,7 +614,7 @@ class MainWindow(QMainWindow):
         path_label.setToolTip(media_file.file_path)
         # path_label.setMaximumWidth(400)
         # 超出部分隐藏鼠标移入显示全部
-        path_label.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
+        # path_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         path_label.setWordWrap(True)
         info_layout.addWidget(path_label)
         

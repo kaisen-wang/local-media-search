@@ -8,6 +8,7 @@ import concurrent.futures
 import json
 import cv2
 import os
+import traceback
 
 class Indexer:
     def __init__(self):
@@ -53,23 +54,55 @@ class Indexer:
     def _index_image(self, file_path: str) -> bool:
         """索引图片文件"""
         try:
+            print(f"\n=== Indexing image: {file_path} ===")
             features = self.feature_extractor.extract_image_features(file_path)
+            
             if features is not None:
+                # 验证特征向量
+                if not isinstance(features, np.ndarray):
+                    print(f"Invalid feature type: {type(features)}")
+                    return False
+                    
+                if len(features.shape) != 1:
+                    print(f"Invalid feature shape: {features.shape}")
+                    return False
+                
+                print(f"Feature vector shape: {features.shape}")
+                
+                # 将特征向量转换为列表并保存
+                feature_list = features.tolist()
                 media_file = MediaFile(
                     file_path=file_path,
                     file_type='image',
-                    feature_vector=json.dumps(features.tolist())
+                    feature_vector=json.dumps(feature_list)
                 )
+                
+                # 验证JSON序列化
+                try:
+                    # 测试反序列化
+                    test_features = np.array(json.loads(media_file.feature_vector))
+                    print(f"Successfully verified feature vector serialization")
+                except Exception as e:
+                    print(f"Feature vector serialization failed: {str(e)}")
+                    return False
+                
                 self.batch_insert([media_file])
+                print(f"Successfully indexed image: {file_path}")
                 return True
+                
+            else:
+                print(f"Failed to extract features from image: {file_path}")
+                return False
+                
         except Exception as e:
             print(f"Error indexing image {file_path}: {str(e)}")
-        return False
+            traceback.print_exc()
+            return False
 
     def _index_video(self, file_path: str) -> bool:
         """索引视频文件"""
         try:
-            # 打开视频文件
+            print(f"\n=== Indexing video: {file_path} ===")
             cap = cv2.VideoCapture(file_path)
             if not cap.isOpened():
                 print(f"Could not open video file: {file_path}")
@@ -94,7 +127,7 @@ class Indexer:
                     'duration': total_frames / fps
                 })
             )
-            
+
             session = Session()
             try:
                 # 保存视频文件记录
@@ -116,7 +149,6 @@ class Indexer:
 
                     if frame_count % frame_interval == 0:
                         try:
-                            # 保存帧图像
                             frame_path = os.path.join(frames_dir, f'frame_{frame_count}.jpg')
                             cv2.imwrite(frame_path, frame)
                             
@@ -124,25 +156,37 @@ class Indexer:
                             features = self.feature_extractor.extract_frame_features(frame)
                             
                             if features is not None:
-                                # 创建帧记录
+                                # 验证特征向量
+                                if not isinstance(features, np.ndarray):
+                                    print(f"Invalid feature type for frame {frame_count}")
+                                    continue
+                                    
+                                if len(features.shape) != 1:
+                                    print(f"Invalid feature shape for frame {frame_count}: {features.shape}")
+                                    continue
+                                
+                                # 将特征向量转换为列表并保存
+                                feature_list = features.tolist()
                                 video_frame = VideoFrame(
                                     media_file_id=media_file.id,
                                     frame_number=frame_count,
                                     timestamp=frame_count / fps,
                                     frame_path=frame_path,
-                                    feature_vector=json.dumps(features.tolist())
+                                    feature_vector=json.dumps(feature_list)
                                 )
-                                frames_data.append(video_frame)
-                                successful_frames += 1
-                            else:
-                                print(f"Failed to extract features for frame {frame_count} in {file_path}")
-                                # 删除未成功处理的帧图像
-                                if os.path.exists(frame_path):
-                                    os.remove(frame_path)
+                                
+                                # 验证JSON序列化
+                                try:
+                                    test_features = np.array(json.loads(video_frame.feature_vector))
+                                    frames_data.append(video_frame)
+                                    successful_frames += 1
+                                    print(f"Successfully processed frame {frame_count}")
+                                except Exception as e:
+                                    print(f"Feature vector serialization failed for frame {frame_count}: {str(e)}")
+                                    continue
 
                         except Exception as e:
-                            print(f"Error processing frame {frame_count} in {file_path}: {str(e)}")
-                            # 清理可能部分创建的文件
+                            print(f"Error processing frame {frame_count}: {str(e)}")
                             if os.path.exists(frame_path):
                                 os.remove(frame_path)
                             continue
