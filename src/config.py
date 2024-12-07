@@ -1,5 +1,4 @@
 import os
-# from pathlib import Path
 from dotenv import load_dotenv
 import torch
 import platform
@@ -34,16 +33,16 @@ def get_os():
 CURRENT_OS = get_os()
 
 # 缓存配置
-CACHE_DIR = get_path(os.getenv('CACHE_DIR', '~/.cache/LocalMediaSearch'))
+CACHE_DIR = get_path(os.getenv('CACHE_DIR', './data/cache'))
 
 # 模型配置
 DEVICE = get_device()
 # MODEL_NAME = get_path(os.getenv('MODEL_NAME', 'OFA-Sys/chinese-clip-vit-base-patch16'))
-MODEL_NAME = get_path(os.getenv('MODEL_NAME', './data/models/chinese-clip-vit-base-patch16'))
+MODEL_NAME = get_path(os.getenv('MODEL_NAME', './models/chinese-clip-vit-base-patch16'))
 
 # 数据库配置
 DB_NAME = os.getenv('DB_NAME', 'media_search.db')
-DB_DIR = get_path(os.getenv('DB_DIR', '~/.config/LocalMediaSearch'))
+DB_DIR = get_path(os.getenv('DB_DIR', './data/db'))
 DB_PATH = os.path.join(DB_DIR, DB_NAME)
 
 # 图片配置

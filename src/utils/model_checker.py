@@ -1,5 +1,4 @@
 import os
-from pathlib import Path
 
 def check_model_files():
     """检查模型文件是否存在并完整"""

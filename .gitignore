@@ -1,5 +1,8 @@
 venv/
 data/
+dist/
+logs/
+models/
 */*/__pycache__
 */*/*.pyc
 */*/*.pyo

@@ -4,39 +4,8 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from datetime import datetime
 from src.config import DB_PATH
-# import tempfile
 from sqlalchemy.orm import relationship
 from sqlalchemy import ForeignKey
-
-# def get_db_path():
-#     """获取数据库路径"""
-#     # 使用用户主目录下的 .config 目录
-#     user_home = os.path.expanduser("~")
-#     app_config_dir = os.path.join(user_home, '.config', 'LocalMediaSearch')
-#     db_path = os.path.join(app_config_dir, 'media_search.db')
-
-#     try:
-#         # 创建配置目录（如果不存在）
-#         os.makedirs(app_config_dir, exist_ok=True)
-#         # 设置目录权限为 700 (只有用户可以读写)
-#         os.chmod(app_config_dir, 0o700)
-        
-#         # 如果数据库文件存在，确保它有正确的权限
-#         if os.path.exists(db_path):
-#             os.chmod(db_path, 0o600)
-            
-#         print(f"Application directory setup complete at {app_config_dir}")
-        
-#     except Exception as e:
-#         print(f"Error setting up application directory: {str(e)}")
-#         # 如果无法创建目录，使用临时目录
-#         db_path = os.path.join(tempfile.gettempdir(), 'media_search.db')
-#         print(f"Falling back to temporary directory: {db_path}")
-
-#     return db_path
-
-# 获取数据库路径
-# DB_PATH = get_db_path()
 
 Base = declarative_base()
 

@@ -2,7 +2,7 @@ from src.core.file_scanner import FileScanner
 from src.core.feature_extractor import FeatureExtractor
 from src.database.models import Session, MediaFile, VideoFrame
 from src.config import CACHE_DIR
-from typing import List, Dict
+from typing import List
 import numpy as np
 import concurrent.futures
 import json

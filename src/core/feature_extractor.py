@@ -3,10 +3,7 @@ from PIL import Image
 from transformers import ChineseCLIPProcessor, ChineseCLIPModel
 import cv2
 import numpy as np
-from tensorflow.keras.applications import ResNet50
-from tensorflow.keras.applications.resnet50 import preprocess_input
-from tensorflow.keras.preprocessing import image
-from typing import Union, List, Tuple
+from typing import Union, List
 import traceback
 from src.config import MODEL_NAME, DEVICE, CACHE_DIR
 

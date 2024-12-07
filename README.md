@@ -76,7 +76,7 @@ mkdir -p ./data/models
 
 2. 下载模型文件：
    - 访问 [chinese-clip-vit-base-patch16](https://huggingface.co/OFA-Sys/chinese-clip-vit-base-patch16)
-   - 下载所有模型文件到 `./data/models/chinese-clip-vit-base-patch16` 目录
+   - 下载所有模型文件到 `./models/chinese-clip-vit-base-patch16` 目录
    - 确保下载以下必要文件：
      - config.json
      - pytorch_model.bin
@@ -112,7 +112,7 @@ mkdir -p ./data/models
 
 2. 下载模型文件：
    - 访问 [chinese-clip-vit-base-patch16](https://huggingface.co/OFA-Sys/chinese-clip-vit-base-patch16)
-   - 下载所有模型文件到 `./data/models/chinese-clip-vit-base-patch16` 目录
+   - 下载所有模型文件到 `./models/chinese-clip-vit-base-patch16` 目录
    - 确保下载以下必要文件：
      - config.json
      - pytorch_model.bin
@@ -136,3 +136,18 @@ mkdir -p ./data/models
 1. 模型文件是否已正确下载
 2. 文件路径是否正确
 3. 文件名是否与配置匹配
+
+```txt
+PyQt6==6.5.0
+torch>=2.2.0
+torchvision>=0.17.0
+transformers>=4.27.0
+faiss-cpu>=1.7.4
+Pillow>=9.5.0
+SQLAlchemy>=2.0.15
+fastapi>=0.95.2
+uvicorn>=0.22.0
+python-multipart>=0.0.6
+numpy>=1.24.0 
+```
+
