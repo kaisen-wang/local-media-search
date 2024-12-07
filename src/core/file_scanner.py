@@ -4,8 +4,6 @@ from pathlib import Path
 from typing import List, Set
 
 class FileScanner:
-    SUPPORTED_IMAGE_EXTENSIONS = IMAGE_EXTENSIONS
-    SUPPORTED_VIDEO_EXTENSIONS = VIDEO_EXTENSIONS
 
     def __init__(self):
         self.indexed_paths: Set[str] = set()
@@ -25,13 +23,12 @@ class FileScanner:
 
     def _is_supported_file(self, file_path: Path) -> bool:
         """检查文件是否为支持的媒体类型"""
-        return (file_path.suffix.lower() in self.SUPPORTED_IMAGE_EXTENSIONS or
-                file_path.suffix.lower() in self.SUPPORTED_VIDEO_EXTENSIONS)
+        return (file_path.suffix.lower() in IMAGE_EXTENSIONS or file_path.suffix.lower() in VIDEO_EXTENSIONS)
 
     def is_image(self, file_path: str) -> bool:
         """检查文件是否为图片"""
-        return Path(file_path).suffix.lower() in self.SUPPORTED_IMAGE_EXTENSIONS
+        return Path(file_path).suffix.lower() in IMAGE_EXTENSIONS
 
     def is_video(self, file_path: str) -> bool:
         """检查文件是否为视频"""
-        return Path(file_path).suffix.lower() in self.SUPPORTED_VIDEO_EXTENSIONS 
+        return Path(file_path).suffix.lower() in VIDEO_EXTENSIONS 

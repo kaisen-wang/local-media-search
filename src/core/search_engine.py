@@ -1,6 +1,6 @@
 import numpy as np
 from typing import List, Tuple
-from src.database.models import Session, MediaFile
+from src.database.models import Session, MediaFile, VideoFrame
 from src.core.feature_extractor import FeatureExtractor
 import json
 
@@ -70,20 +70,40 @@ class SearchEngine:
             print(f"Error in text search: {e}")
             return []
 
-    def image_search(self, image_path: str, top_k: int = 20) -> List[Tuple[int, float]]:
-        """通过图片搜索"""
+    def image_search(self, query_image_path: str, limit: int = 20) -> List[tuple]:
+        """图像搜索，返回相似的图片和视频帧"""
         try:
-            print(f"Performing image search for: {image_path}")
-            # 提取查询图片的特征
-            query_features = self.feature_extractor.extract_image_features(image_path)
+            # 提取查询图像的特征
+            query_features = self.feature_extractor.extract_image_features(query_image_path)
             if query_features is None:
-                print("Failed to extract image features")
                 return []
-            
-            return self._search_with_features(query_features, top_k)
-            
+
+            results = []
+            session = Session()
+            try:
+                # 搜索图片
+                image_files = session.query(MediaFile).filter_by(file_type='image').all()
+                for media_file in image_files:
+                    features = np.array(json.loads(media_file.feature_vector))
+                    similarity = self.feature_extractor.calculate_similarity(query_features, features)
+                    results.append((media_file.id, similarity, 'image', None))
+
+                # 搜索视频帧
+                video_frames = session.query(VideoFrame).all()
+                for frame in video_frames:
+                    features = np.array(json.loads(frame.feature_vector))
+                    similarity = self.feature_extractor.calculate_similarity(query_features, features)
+                    results.append((frame.media_file_id, similarity, 'video', frame))
+
+                # 按相似度排序
+                results.sort(key=lambda x: x[1], reverse=True)
+                return results[:limit]
+
+            finally:
+                session.close()
+
         except Exception as e:
-            print(f"Error in image search: {e}")
+            print(f"Error in image search: {str(e)}")
             return []
 
     def _search_with_features(self, query_features: np.ndarray, top_k: int) -> List[Tuple[int, float]]:

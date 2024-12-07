@@ -6,6 +6,7 @@ from PyQt6.QtGui import QDragEnterEvent, QDropEvent, QPixmap, QImage
 from src.core.indexer import Indexer
 from src.core.search_engine import SearchEngine
 import os
+import subprocess
 from src.database.models import Session, MediaFile
 import concurrent.futures
 from src.config import CURRENT_OS, WINDOW_TITLE, WINDOW_MIN_WIDTH, WINDOW_MIN_HEIGHT
@@ -485,20 +486,23 @@ class MainWindow(QMainWindow):
 
         session = Session()
         try:
-            for file_id, similarity in results:
+            for file_id, similarity, result_type, frame in results:
                 media_file = session.query(MediaFile).get(file_id)
                 if media_file and os.path.exists(media_file.file_path):
                     # 创建单行结果容器
                     row_widget = QWidget()
                     row_layout = QHBoxLayout(row_widget)
-                    row_layout.setContentsMargins(5, 5, 5, 5)
                     
-                    # 1. 缩略图列
+                    # 缩略图
+                    if result_type == 'image':
+                        thumbnail_path = media_file.file_path
+                    else:  # video
+                        thumbnail_path = frame.frame_path
+                        
                     thumbnail = QLabel()
-                    pixmap = QPixmap(media_file.file_path)
+                    pixmap = QPixmap(thumbnail_path)
                     if not pixmap.isNull():
-                        scaled_pixmap = pixmap.scaled(
-                            100, 100,
+                        scaled_pixmap = pixmap.scaled(100, 100,
                             Qt.AspectRatioMode.KeepAspectRatio,
                             Qt.TransformationMode.SmoothTransformation
                         )
@@ -506,50 +510,47 @@ class MainWindow(QMainWindow):
                     thumbnail.setFixedSize(100, 100)
                     row_layout.addWidget(thumbnail)
 
-                    # 2. 文件信息列
+                    # 文件信息
                     info_widget = QWidget()
                     info_layout = QVBoxLayout(info_widget)
                     
-                    # 文件名
-                    filename_label = QLabel(os.path.basename(media_file.file_path))
-                    filename_label.setStyleSheet("font-weight: bold;")
-                    info_layout.addWidget(filename_label)
+                    # 文件名和类型
+                    filename = os.path.basename(media_file.file_path)
+                    type_text = "视频" if result_type == 'video' else "图片"
+                    name_label = QLabel(f"{filename} ({type_text})")
+                    name_label.setStyleSheet("font-weight: bold;")
+                    info_layout.addWidget(name_label)
+                    
+                    # 对于视频，显示时间戳
+                    if result_type == 'video':
+                        timestamp = frame.timestamp
+                        time_label = QLabel(f"时间: {timestamp:.2f}秒")
+                        info_layout.addWidget(time_label)
                     
                     # 文件路径
                     path_label = QLabel(media_file.file_path)
-                    # path_label.setStyleSheet("color: gray;")
-                    path_label.setToolTip(media_file.file_path)  # 完整路径提示
-                    # 设置路径标签自动省略
+                    path_label.setStyleSheet("color: gray;")
+                    path_label.setToolTip(media_file.file_path)
                     path_label.setMaximumWidth(400)
-                    path_label.setMinimumWidth(200)
-                    path_label.setTextFormat(Qt.TextFormat.PlainText)
-                    path_label.setWordWrap(False)
-                    path_metrics = path_label.fontMetrics()
-                    elided_path = path_metrics.elidedText(
-                        media_file.file_path, 
-                        Qt.TextElideMode.ElideMiddle,
-                        path_label.maximumWidth()
-                    )
-                    path_label.setText(elided_path)
                     info_layout.addWidget(path_label)
                     
                     row_layout.addWidget(info_widget)
 
-                    # 3. 打开文件夹按钮
+                    # 操作按钮
+                    if result_type == 'video':
+                        # 添加跳转到指定时间的按钮
+                        play_btn = QPushButton("播放视频片段")
+                        play_btn.clicked.connect(
+                            lambda checked, path=media_file.file_path, time=frame.timestamp:
+                            self.play_video_at_timestamp(path, time)
+                        )
+                        row_layout.addWidget(play_btn)
+                    
                     open_folder_btn = QPushButton("打开所在文件夹")
-                    open_folder_btn.setFixedWidth(120)
                     open_folder_btn.clicked.connect(
                         lambda checked, path=media_file.file_path: self._open_folder(path)
                     )
                     row_layout.addWidget(open_folder_btn)
-
-                    # 设置行widget的样式
-                    row_widget.setStyleSheet("""
-                        QHBoxLayout {
-                            border: 1px solid #ddd;
-                            border-radius: 5px;
-                        }
-                    """)
 
                     list_layout.addWidget(row_widget)
 
@@ -566,6 +567,7 @@ class MainWindow(QMainWindow):
             session.close()
     
     def _open_folder(self, path):
+        print(f"Opening folder for: {path}")
         if CURRENT_OS == 'linux':
             os.system(f'xdg-open "{os.path.dirname(path)}"')
         elif CURRENT_OS == 'windows':
@@ -574,3 +576,31 @@ class MainWindow(QMainWindow):
             os.system(f'open -R "{path}"')
         else:
             raise ValueError("Unsupported OS")
+    
+    def play_video_at_timestamp(self, video_path: str, timestamp: float):
+        """使用默认播放器播放视频，并尝试跳转到指定时间"""
+        print(f"Playing video: {video_path}, timestamp: {timestamp}")
+        command = []
+
+        if CURRENT_OS == 'windows':
+            # 使用默认播放器
+            command = ['start', '', video_path]
+        elif CURRENT_OS == 'macos':  # macOS
+            # 使用默认播放器
+            command = ['open', video_path]
+        elif CURRENT_OS == 'linux':
+            # 使用默认播放器
+            command = ['xdg-open', video_path]
+        else:
+            raise ValueError("Unsupported OS")
+
+        try:
+            subprocess.run(command, check=True)
+        except subprocess.CalledProcessError as e:
+            print(f"Error executing command: {e}")
+        except FileNotFoundError as e:
+            print(f"Command not found: {e}")
+
+        # 这里使用 ffplay 播放器（需要安装 ffmpeg）
+        # os.system(f'ffplay "{video_path}" -ss {timestamp}')
+        # 注意：具体的播放命令可能需要根据操作系统和安装的播放器进行调整

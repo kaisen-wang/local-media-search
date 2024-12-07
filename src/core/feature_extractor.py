@@ -5,6 +5,11 @@ from typing import Union, List
 import numpy as np
 import traceback
 from src.config import MODEL_NAME, DEVICE, CACHE_DIR
+import cv2
+from tensorflow.keras.applications import ResNet50
+from tensorflow.keras.applications.resnet50 import preprocess_input
+from tensorflow.keras.preprocessing import image
+import tensorflow as tf
 
 class FeatureExtractor:
     def __init__(self):
@@ -36,6 +41,11 @@ class FeatureExtractor:
             
             print("=== Initialization Complete ===")
             
+            # 加载预训练模型，去掉最后的分类层
+            self.model = ResNet50(weights='imagenet', include_top=False, pooling='avg')
+            # 预热模型
+            self._warmup_model()
+            
         except Exception as e:
             print("\n=== Initialization Error ===")
             print(f"Error type: {type(e).__name__}")
@@ -44,35 +54,29 @@ class FeatureExtractor:
             print("===========================")
             raise
 
-    def extract_image_features(self, image_path: str) -> np.ndarray:
-        """从图片中提取特征向量"""
+    def _warmup_model(self):
+        """预热模型，避免第一次提取特征时的延迟"""
+        dummy_input = np.zeros((1, 224, 224, 3))
+        self.model.predict(dummy_input)
+
+    def extract_image_features(self, image_path):
+        """从图片文件提取特征"""
         try:
-            print(f"\nProcessing image: {image_path}")
+            # 加载并预处理图片
+            img = image.load_img(image_path, target_size=(224, 224))
+            x = image.img_to_array(img)
+            x = np.expand_dims(x, axis=0)
+            x = preprocess_input(x)
             
-            # 读取图片
-            image = Image.open(image_path).convert('RGB')
+            # 直接使用模型预测获取特征
+            features = self.model.predict(x, verbose=0)
             
-            # 使用处理器处理图片
-            inputs = self.processor(
-                images=image,
-                return_tensors="pt",
-                padding=True
-            )
-            
-            with torch.no_grad():
-                # 提取图像特征
-                image_features = self.model.get_image_features(**inputs)
-                # 归一化
-                image_features = image_features / image_features.norm(dim=-1, keepdim=True)
-            
-            return image_features.numpy()[0]
+            # 标准化特征向量
+            features_normalized = features[0] / np.linalg.norm(features[0])
+            return features_normalized
             
         except Exception as e:
-            print("\n=== Image Processing Error ===")
-            print(f"Error type: {type(e).__name__}")
-            print(f"Error message: {str(e)}")
-            traceback.print_exc()
-            print("============================")
+            print(f"Error extracting features from image {image_path}: {str(e)}")
             return None
 
     def extract_text_features(self, text: Union[str, List[str]]) -> np.ndarray:
@@ -135,3 +139,33 @@ class FeatureExtractor:
             traceback.print_exc()
             print("==================================")
             return 0.0
+
+    def extract_frame_features(self, frame):
+        """从视频帧提取特征"""
+        try:
+            # 调整帧大小
+            frame = cv2.resize(frame, (224, 224))
+            
+            # OpenCV使用BGR格式，需要转换为RGB
+            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            
+            # 预处理帧
+            x = image.img_to_array(frame)
+            x = np.expand_dims(x, axis=0)
+            x = preprocess_input(x)
+            
+            # 直接使用模型预测获取特征
+            features = self.model.predict(x, verbose=0)
+            
+            # 标准化特征向量
+            features_normalized = features[0] / np.linalg.norm(features[0])
+            return features_normalized
+            
+        except Exception as e:
+            print(f"Error extracting features from video frame: {str(e)}")
+            return None
+
+    def calculate_similarity(self, features1, features2):
+        """计算两个特征向量之间的相似度"""
+        # 使用余弦相似度
+        return np.dot(features1, features2)  # 由于特征已经标准化，直接点积即可
