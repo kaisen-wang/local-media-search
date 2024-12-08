@@ -1,10 +1,11 @@
 import os
-from dotenv import load_dotenv
 import torch
 import platform
+import configparser
 
-# 加载.env文件
-load_dotenv()
+# 读取 config.ini 文件
+config = configparser.ConfigParser()
+config.read('config.ini')
 
 def get_path(path_str: str) -> str:
     """展开路径中的波浪号和环境变量"""
@@ -33,30 +34,29 @@ def get_os():
 CURRENT_OS = get_os()
 
 # 缓存配置
-CACHE_DIR = get_path(os.getenv('CACHE_DIR', './data/cache'))
+CACHE_DIR = get_path(config.get('Cache', 'cache_dir', fallback='./data/cache'))
 
 # 模型配置
 DEVICE = get_device()
-# MODEL_NAME = get_path(os.getenv('MODEL_NAME', 'OFA-Sys/chinese-clip-vit-base-patch16'))
-MODEL_NAME = get_path(os.getenv('MODEL_NAME', './models/chinese-clip-vit-base-patch16'))
+MODEL_NAME = get_path(config.get('Model', 'model_name', fallback='./models/chinese-clip-vit-base-patch16'))
 
 # 数据库配置
-DB_NAME = os.getenv('DB_NAME', 'media_search.db')
-DB_DIR = get_path(os.getenv('DB_DIR', './data/db'))
+DB_NAME = config.get('Database', 'db_name', fallback='media_search.db')
+DB_DIR = get_path(config.get('Database', 'db_dir', fallback='./data/db'))
 DB_PATH = os.path.join(DB_DIR, DB_NAME)
 
-# 图片配置
-IMAGE_EXTENSIONS = os.getenv('IMAGE_EXTENSIONS', '.jpg,.jpeg,.png,.gif,.bmp').split(',')
-VIDEO_EXTENSIONS = os.getenv('VIDEO_EXTENSIONS', '.mp4,.avi,.mov,.mkv').split(',')
-MAX_IMAGE_SIZE = int(os.getenv('MAX_IMAGE_SIZE', '224'))
-BATCH_SIZE = int(os.getenv('BATCH_SIZE', '32'))
+# 媒体文件配置
+IMAGE_EXTENSIONS = config.get('Media', 'image_extensions', fallback='.jpg,.jpeg,.png,.gif,.bmp').split(',')
+VIDEO_EXTENSIONS = config.get('Media', 'video_extensions', fallback='.mp4,.avi,.mov,.mkv,.wmv,.flv,.avi,.rmvb,.webm').split(',')
+MAX_IMAGE_SIZE = config.getint('Media', 'max_image_size', fallback=224)
+BATCH_SIZE = config.getint('Media', 'batch_size', fallback=32)
 
 # 界面配置
-WINDOW_TITLE = os.getenv('WINDOW_TITLE', 'LocalMediaSearch')
-WINDOW_MIN_WIDTH = int(os.getenv('WINDOW_MIN_WIDTH', '800'))
-WINDOW_MIN_HEIGHT = int(os.getenv('WINDOW_MIN_HEIGHT', '600'))
-RESULTS_PER_ROW = int(os.getenv('RESULTS_PER_ROW', '4'))
-THUMBNAIL_SIZE = int(os.getenv('THUMBNAIL_SIZE', '200'))
+WINDOW_TITLE = config.get('Window', 'title', fallback='LocalMediaSearch')
+WINDOW_MIN_WIDTH = config.getint('Window', 'min_width', fallback=800)
+WINDOW_MIN_HEIGHT = config.getint('Window', 'min_height', fallback=600)
+RESULTS_PER_ROW = config.getint('Window', 'results_per_row', fallback=4)
+THUMBNAIL_SIZE = config.getint('Window', 'thumbnail_size', fallback=200)
 
 # 创建必要的目录
 os.makedirs(DB_DIR, exist_ok=True)

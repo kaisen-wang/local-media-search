@@ -77,15 +77,6 @@ class Indexer:
                     feature_vector=json.dumps(feature_list)
                 )
                 
-                # 验证JSON序列化
-                try:
-                    # 测试反序列化
-                    test_features = np.array(json.loads(media_file.feature_vector))
-                    print(f"Successfully verified feature vector serialization")
-                except Exception as e:
-                    print(f"Feature vector serialization failed: {str(e)}")
-                    return False
-                
                 self.batch_insert([media_file])
                 print(f"Successfully indexed image: {file_path}")
                 return True
@@ -175,15 +166,8 @@ class Indexer:
                                     feature_vector=json.dumps(feature_list)
                                 )
                                 
-                                # 验证JSON序列化
-                                try:
-                                    test_features = np.array(json.loads(video_frame.feature_vector))
-                                    frames_data.append(video_frame)
-                                    successful_frames += 1
-                                    print(f"Successfully processed frame {frame_count}")
-                                except Exception as e:
-                                    print(f"Feature vector serialization failed for frame {frame_count}: {str(e)}")
-                                    continue
+                                frames_data.append(video_frame)
+                                successful_frames += 1
 
                         except Exception as e:
                             print(f"Error processing frame {frame_count}: {str(e)}")

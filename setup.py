@@ -29,7 +29,7 @@ build_exe_options = {
         "tkinter", "unittest", "email", "http", "xml",
     ],
     "include_files": [
-        ("src/config.py", "config.py"),
+        ("config.ini", "config.ini"),
         ("models", "models"),
     ],
     "include_msvcr": True,

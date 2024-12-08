@@ -1,5 +1,6 @@
 import sys
 from PyQt6.QtWidgets import QApplication, QMessageBox
+from PyQt6.QtGui import QIcon
 from src.gui.main_window import MainWindow
 from src.database.models import init_db
 
@@ -23,7 +24,9 @@ def main():
     
     # 设置应用程序信息
     app.setApplicationName("LocalMediaSearch")
-    app.setApplicationDisplayName("本地媒体搜索")
+    app.setApplicationDisplayName("本地媒体智能搜索工具")
+    # 添加图标
+    app.setWindowIcon(QIcon("resources/logo.ico"))
     
     # 初始化应用
     if not initialize_app():

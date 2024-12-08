@@ -37,6 +37,12 @@ LocalMediaSearch 是一个跨平台（Windows、macOS、Linux）的本地媒体�
    # 克隆项目
    git clone https://github.com/yourusername/LocalMediaSearch
    
+   # 创建虚拟环境
+   python -m venv venv
+   
+   # 进入虚拟环境
+   source venv/bin/activate
+   
    # 安装依赖
    pip install -r requirements.txt
    

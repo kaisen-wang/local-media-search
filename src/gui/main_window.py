@@ -156,6 +156,27 @@ class RefreshWorker(QThread):
         except Exception as e:
             self.error.emit(str(e))
 
+class SearchWorker(QThread):
+    """后台搜索线程"""
+    finished = pyqtSignal(list)  # 完成信号，返回搜索结果
+    error = pyqtSignal(str)  # 错误信号
+
+    def __init__(self, search_engine, query, type):
+        super().__init__()
+        self.search_engine = search_engine
+        self.query = query
+        self.type = type
+
+    def run(self):
+        try:
+            if type == 'image':
+                results = self.search_engine.image_search(self.query)
+            else:
+                results = self.search_engine.text_search(self.query)
+            self.finished.emit(results)
+        except Exception as e:
+            self.error.emit(str(e))
+
 class MainWindow(QMainWindow):
     def __init__(self, parent=None):
         super(MainWindow, self).__init__(parent)
@@ -197,6 +218,12 @@ class MainWindow(QMainWindow):
         screen = QGuiApplication.primaryScreen().size()
         size = self.geometry()
         self.move(int((screen.width() - size.width()) / 2), int((screen.height() - size.height()) / 2))
+
+    def _show_status_bar_message(self, message: str, duration: int = 10000):  
+        # 使用showMessage替换showStatusBar
+        self.statusBar().clearMessage()
+
+        self.statusBar().showMessage(message, duration)
 
     def setup_ui(self):
         """优化的UI设置"""
@@ -252,7 +279,7 @@ class MainWindow(QMainWindow):
         self.create_results_area()
         
         # 状态栏
-        self.statusBar().showMessage("就绪")
+        self._show_status_bar_message("就绪")
 
     def create_results_area(self):
         """创建优化的结果显示区域"""
@@ -376,7 +403,7 @@ class MainWindow(QMainWindow):
             self.loading_dialog.close()
             
             # 更新状态栏
-            self.statusBar().showMessage(f"搜索索引加载完成")
+            self._show_status_bar_message(f"搜索索引加载完成")
             
         except Exception as e:
             print(f"Error rebuilding search index: {str(e)}")
@@ -482,10 +509,27 @@ class MainWindow(QMainWindow):
             return
             
         try:
-            self.statusBar().showMessage("正在搜索...")
-            results = self.search_engine.text_search(query)
-            self.display_results(results)
-            self.statusBar().showMessage(f"找到 {len(results)} 个结果", 5000)
+            # 显示加载对话框
+            self.progress_dialog = QProgressDialog(
+                "正在搜索...", 
+                None,  # 不显示取消按钮
+                0, 
+                0,  # 设置为0表示不确定进度
+                self
+            )
+            self.progress_dialog.setWindowModality(Qt.WindowModality.WindowModal)
+            self.progress_dialog.setAutoClose(True)
+            self.progress_dialog.setCancelButton(None)  # 禁用取消按钮
+            self.progress_dialog.setMinimumDuration(0)  # 立即显示
+            
+            # 创建搜索线程
+            self.search_worker = SearchWorker(self.search_engine, query, 'text')
+            self.search_worker.finished.connect(self._search_finished)
+            self.search_worker.error.connect(self._search_error)
+            
+            self._show_status_bar_message("正在搜索...")
+            self.progress_dialog.show()
+            self.search_worker.start()
             
         except Exception as e:
             QMessageBox.critical(
@@ -493,7 +537,7 @@ class MainWindow(QMainWindow):
                 "搜索错误",
                 f"搜索过程中发生错误：{str(e)}"
             )
-            self.statusBar().showMessage("搜索失败", 5000)
+            self._show_status_bar_message("搜索失败", 5000)
 
     def open_image_search(self):
         """打开图片搜索对话框"""
@@ -504,20 +548,59 @@ class MainWindow(QMainWindow):
             "Images (*.png *.jpg *.jpeg)"
         )
         
-        if file_name:
-            try:
-                self.statusBar().showMessage("正在搜索...")
-                results = self.search_engine.image_search(file_name)
-                self.display_results(results)
-                self.statusBar().showMessage(f"找到 {len(results)} 个结果", 5000)
-                
-            except Exception as e:
-                QMessageBox.critical(
-                    self,
-                    "搜索错误",
-                    f"图片搜索过程中发生错误：{str(e)}"
-                )
-                self.statusBar().showMessage("搜索失败", 5000)
+        if not file_name:
+            QMessageBox.warning(self, "提示", "请选择要搜索的图片")
+            return
+        
+
+        try:
+            # 显示加载对话框
+            self.progress_dialog = QProgressDialog(
+                "正在搜索...", 
+                None,  # 不显示取消按钮
+                0, 
+                0,  # 设置为0表示不确定进度
+                self
+            )
+            self.progress_dialog.setWindowModality(Qt.WindowModality.WindowModal)
+            self.progress_dialog.setAutoClose(True)
+            self.progress_dialog.setCancelButton(None)  # 禁用取消按钮
+            self.progress_dialog.setMinimumDuration(0)  # 立即显示
+            
+            # 创建搜索线程
+            self.search_worker = SearchWorker(self.search_engine, file_name, 'image')
+            self.search_worker.finished.connect(self._search_finished)
+            self.search_worker.error.connect(self._search_error)
+            
+            self._show_status_bar_message("正在搜索...")
+            self.progress_dialog.show()
+            self.search_worker.start()
+            
+        except Exception as e:
+            QMessageBox.critical(
+                self,
+                "搜索错误",
+                f"图片搜索过程中发生错误：{str(e)}"
+            )
+            self._show_status_bar_message("搜索失败", 5000)
+
+    def _search_finished(self, results):
+        """搜索完成处理"""
+        if self.progress_dialog:
+            self.progress_dialog.close()
+        self.display_results(results)
+        self._show_status_bar_message(f"找到 {len(results)} 个结果")
+
+    def _search_error(self, error_msg):
+        """搜索错误处理"""
+        if self.progress_dialog:
+            self.progress_dialog.close()
+        QMessageBox.critical(
+            self,
+            "搜索错误",
+            f"搜索过程中发生错误：{error_msg}"
+        )
+        self._show_status_bar_message("搜索失败", 5000)
 
     def display_results(self, results):
         """优化的结果显示方法"""
@@ -566,6 +649,7 @@ class MainWindow(QMainWindow):
         
         layout = QHBoxLayout(card)
         layout.setContentsMargins(10, 10, 10, 10)
+        layout.setAlignment(Qt.AlignmentFlag.AlignCenter)  # 设置布局居中对齐
         
         # 缩略图
         if result_type == 'image':
@@ -573,15 +657,16 @@ class MainWindow(QMainWindow):
         else:
             thumbnail_path = frame.frame_path
             
-        thumbnail = QLabel()
-        pixmap = QPixmap(thumbnail_path)
-        if not pixmap.isNull():
-            scaled_pixmap = pixmap.scaled(
-                150, 150,
-                Qt.AspectRatioMode.KeepAspectRatio,
-                Qt.TransformationMode.SmoothTransformation
-            )
-            thumbnail.setPixmap(scaled_pixmap)
+        thumbnail = ImageLabel(thumbnail_path) # QLabel()
+        thumbnail.setAlignment(Qt.AlignmentFlag.AlignCenter)  # 设置标签居中对齐
+        # pixmap = QPixmap(thumbnail_path)
+        # if not pixmap.isNull():
+        #     scaled_pixmap = pixmap.scaled(
+        #         150, 150,
+        #         Qt.AspectRatioMode.KeepAspectRatio,
+        #         Qt.TransformationMode.SmoothTransformation
+        #     )
+        #     thumbnail.setPixmap(scaled_pixmap)
         thumbnail.setFixedSize(150, 150)
         layout.addWidget(thumbnail)
         
