@@ -66,7 +66,7 @@ class SearchEngine:
             print("Search index not built or empty, rebuilding...")
             self.build_index()
 
-    def text_search(self, query_text: str, limit: int = 20) -> List[Tuple]:
+    def text_search(self, query_text: str) -> List[Tuple]:
         """文本搜索"""
         try:
             self._ensure_index_built()  # 确保索引已构建
@@ -81,14 +81,14 @@ class SearchEngine:
                 return []
 
             print("Successfully extracted text features")
-            return self._search_with_features(query_features, limit)
+            return self._search_with_features(query_features)
 
         except Exception as e:
             print(f"Error in text search: {str(e)}")
             traceback.print_exc()
             return []
 
-    def image_search(self, query_image_path: str, limit: int = 20) -> List[Tuple]:
+    def image_search(self, query_image_path: str) -> List[Tuple]:
         """图像搜索"""
         try:
             self._ensure_index_built()  # 确保索引已构建
@@ -103,14 +103,14 @@ class SearchEngine:
                 return []
 
             print("Successfully extracted image features")
-            return self._search_with_features(query_features, limit)
+            return self._search_with_features(query_features)
 
         except Exception as e:
             print(f"Error in image search: {str(e)}")
             traceback.print_exc()
             return []
 
-    def _search_with_features(self, query_features: np.ndarray, limit: int) -> List[Tuple]:
+    def _search_with_features(self, query_features: np.ndarray) -> List[Tuple]:
         """使用特征向量搜索"""
         try:
             results = []
@@ -124,9 +124,7 @@ class SearchEngine:
                     print(f"Query features shape: {query_features.shape}")
                     print(f"Index features shape for {key}: {features.shape}")
                     
-                    similarity = self.feature_extractor.calculate_similarity(
-                        query_features, features
-                    )
+                    similarity = self.feature_extractor.calculate_similarity(query_features, features)
                     
                     print(f"Similarity for {key}: {similarity}")
                     
@@ -148,10 +146,7 @@ class SearchEngine:
 
             # 按相似度排序
             results.sort(key=lambda x: x[1], reverse=True)
-            print(f"\nFound {len(results)} results above threshold {self.similarity_threshold}")
-            
-            return results[:limit]
-
+            return results
         except Exception as e:
             print(f"Error in feature search: {str(e)}")
             traceback.print_exc()

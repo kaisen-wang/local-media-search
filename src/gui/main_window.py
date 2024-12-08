@@ -93,9 +93,15 @@ class ImageLabel(QLabel):
         """处理鼠标点击事件"""
         if event.button() == Qt.MouseButton.LeftButton:
             # 在默认图片查看器中打开图片
-            os.system(f'xdg-open "{self.file_path}"')  # Linux
-            # 对于 Windows，使用：os.startfile(self.file_path)
-            # 对于 MacOS，使用：os.system(f'open "{self.file_path}"')
+            if CURRENT_OS == 'linux':
+                os.system(f'xdg-open "{self.file_path}"')  # Linux
+            elif CURRENT_OS == 'windows':
+                os.startfile(self.file_path) # Windows
+            elif CURRENT_OS == 'macos':
+                os.system(f'open "{self.file_path}"')   # MacOS
+            else:
+                raise ValueError("Unsupported OS")
+
 
 class RefreshWorker(QThread):
     """后台刷新线程"""
@@ -219,14 +225,14 @@ class MainWindow(QMainWindow):
         size = self.geometry()
         self.move(int((screen.width() - size.width()) / 2), int((screen.height() - size.height()) / 2))
 
-    def _show_status_bar_message(self, message: str, duration: int = 10000):  
+    def _show_status_bar_message(self, message: str, msecs: int = -1):  
         # 使用showMessage替换showStatusBar
         self.statusBar().clearMessage()
 
-        self.statusBar().showMessage(message, duration)
+        self.statusBar().showMessage(message, msecs)
 
     def setup_ui(self):
-        """优化的UI设置"""
+        """UI设置"""
         # 创建中心部件
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
@@ -284,19 +290,32 @@ class MainWindow(QMainWindow):
     def create_results_area(self):
         """创建优化的结果显示区域"""
         # 创建滚动区域
-        scroll_area = QScrollArea()
-        scroll_area.setWidgetResizable(True)
-        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
-        scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self.scroll_area = QScrollArea()
+        self.scroll_area.setWidgetResizable(True)
+        self.scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self.scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         
         # 创建结果容器
         self.results_widget = QWidget()
         self.results_layout = QVBoxLayout(self.results_widget)
         self.results_layout.setSpacing(10)
+        self.results_layout.setContentsMargins(10, 10, 10, 10)
         self.results_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
         
-        scroll_area.setWidget(self.results_widget)
-        self.centralWidget().layout().addWidget(scroll_area)
+        # 设置最小宽度以确保内容填充
+        self.results_widget.setMinimumWidth(self.scroll_area.viewport().width())
+        
+        self.scroll_area.setWidget(self.results_widget)
+        self.centralWidget().layout().addWidget(self.scroll_area)
+        
+        # 连接大小变化信号
+        self.scroll_area.viewport().installEventFilter(self)
+
+    def eventFilter(self, obj, event):
+        """处理事件过滤"""
+        if obj == self.scroll_area.viewport() and event.type() == event.Type.Resize:
+            self.results_widget.setMinimumWidth(self.scroll_area.viewport().width())
+        return super().eventFilter(obj, event)
 
     def load_indexed_folders(self):
         """从数据库加载已索引的文件夹"""
@@ -604,22 +623,48 @@ class MainWindow(QMainWindow):
 
     def display_results(self, results):
         """优化的结果显示方法"""
+        # 存储所有结果
+        self.all_results = results
+        self.current_page = 0
+        self.items_per_page = 20
+        
         # 清除现有结果
         for i in reversed(range(self.results_layout.count())): 
             widget = self.results_layout.itemAt(i).widget()
             if widget:
                 widget.setParent(None)
 
-        if not results:
+        if not self.all_results:
             no_results_label = QLabel("没有找到匹配的结果")
             no_results_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
             no_results_label.setStyleSheet("color: gray; padding: 20px;")
             self.results_layout.addWidget(no_results_label)
             return
 
+        # 显示前20条数据
+        self.load_more_results()
+        
+        # 连接滚动事件
+        self.scroll_area.verticalScrollBar().valueChanged.connect(self.check_scroll_bottom)
+
+    def check_scroll_bottom(self):
+        """检查是否滚动到底部"""
+        scrollbar = self.scroll_area.verticalScrollBar()
+        if scrollbar.value() == scrollbar.maximum():
+            self.load_more_results()
+
+    def load_more_results(self):
+        """加载更多结果"""
+        length = len(self.all_results)
+        start_index = self.current_page * self.items_per_page
+        if start_index >= length:
+            return
+        end_index = min((start_index + self.items_per_page), length)
+        results_to_display = self.all_results[start_index:end_index]
+        
         session = Session()
         try:
-            for file_id, similarity, result_type, frame in results:
+            for file_id, similarity, result_type, frame in results_to_display:
                 media_file = session.query(MediaFile).get(file_id)
                 if media_file and os.path.exists(media_file.file_path):
                     # 创建结果卡片
@@ -627,9 +672,10 @@ class MainWindow(QMainWindow):
                         media_file, similarity, result_type, frame
                     )
                     self.results_layout.addWidget(result_card)
-
         finally:
             session.close()
+        
+        self.current_page += 1
 
     def create_result_card(self, media_file, similarity, result_type, frame):
         """创建单个结果卡片"""
@@ -648,6 +694,7 @@ class MainWindow(QMainWindow):
         """)
         
         layout = QHBoxLayout(card)
+        layout.setSpacing(5)
         layout.setContentsMargins(10, 10, 10, 10)
         layout.setAlignment(Qt.AlignmentFlag.AlignCenter)  # 设置布局居中对齐
         
@@ -679,6 +726,8 @@ class MainWindow(QMainWindow):
         type_text = "视频" if result_type == 'video' else "图片"
         name_label = QLabel(f"{filename} ({type_text})")
         name_label.setStyleSheet("font-weight: bold;")
+        name_label.setAlignment(Qt.AlignmentFlag.AlignLeft)
+        name_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         info_layout.addWidget(name_label)
         
         # 相似度
@@ -696,11 +745,11 @@ class MainWindow(QMainWindow):
         # 文件路径
         path_label = QLabel(media_file.file_path)
         # path_label.setStyleSheet("color: gray;")
-        path_label.setToolTip(media_file.file_path)
-        # path_label.setMaximumWidth(400)
-        # 超出部分隐藏鼠标移入显示全部
-        # path_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        path_label.setWordWrap(True)
+        path_label.setToolTip(media_file.file_path) # 设置工具提示
+        path_label.setWordWrap(False) # 禁止换行
+        path_label.setAlignment(Qt.AlignmentFlag.AlignLeft)
+        path_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        # path_label.setElideMode(Qt.TextElideMode.ElideRight)  # 隐藏末尾部分
         info_layout.addWidget(path_label)
         
         layout.addWidget(info_widget, stretch=1)

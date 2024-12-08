@@ -15,7 +15,7 @@ def build_windows():
     """Windows打包"""
     print("正在构建Windows安装包...")
     # 使用cx_Freeze构建
-    subprocess.run([sys.executable, "setup.py", "build"])
+    subprocess.run([sys.executable, "setup.py", "build", "--include-module=http.client"])
     
     # 使用NSIS创建安装程序
     if os.path.exists("installer.nsi"):

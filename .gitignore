@@ -1,8 +1,10 @@
 venv/
 data/
 dist/
+build/
 logs/
 models/
+*.spec
 */*/LocalMediaSearch
 */*/__pycache__
 */*/*.pyc
