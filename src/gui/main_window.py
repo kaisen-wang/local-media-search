@@ -668,9 +668,7 @@ class MainWindow(QMainWindow):
                 media_file = session.query(MediaFile).get(file_id)
                 if media_file and os.path.exists(media_file.file_path):
                     # 创建结果卡片
-                    result_card = self.create_result_card(
-                        media_file, similarity, result_type, frame
-                    )
+                    result_card = self.create_result_card(media_file, similarity, result_type, frame)
                     self.results_layout.addWidget(result_card)
         finally:
             session.close()
