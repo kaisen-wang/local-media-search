@@ -29,13 +29,13 @@ LocalMediaSearch 是一个跨平台（Windows、macOS、Linux）的本地媒体�
 
 ## 安装说明
 1. 环境要求
-   - Python 3.8+
+   - Python 3.12+
    - CUDA 支持（可选，用于GPU加速）
 
 2. 安装步骤
    ```bash
    # 克隆项目
-   git clone https://github.com/yourusername/LocalMediaSearch
+   git clone https://gitee.com/kaisen-wang/local-media-search.git
    
    # 创建虚拟环境
    python -m venv venv
@@ -51,7 +51,7 @@ LocalMediaSearch 是一个跨平台（Windows、macOS、Linux）的本地媒体�
 
    # 打包程序
    pip install pyinstaller
-   pyinstaller -D -w -i resources\logo.ico main.py
+   pyinstaller -D -w -i resources/logo.ico -n LocalMediaSearch main.py
    or
    python build.py
    ```
@@ -69,8 +69,17 @@ LocalMediaSearch 是一个跨平台（Windows、macOS、Linux）的本地媒体�
 ## 开发计划
 - [X] v1.0: 基础搜索功能
 - [X] v1.1: 添加视频帧提取和检索
-- [ ] v1.2: 优化搜索算法和用户界面
+- [X] v1.2: 优化搜索算法和用户界面
 - [ ] v2.0: 添加更多高级特性
+
+## CI/CD Pipeline
+项目使用GitHub Actions进行持续集成和部署：
+- 自动运行测试（Windows/macOS/Linux）
+- 自动构建可执行文件
+- 自动发布版本
+- 自动部署文档
+
+详细配置请查看 `pipeline.yml` 文件。
 
 ## 贡献指南
 欢迎提交 Issue 和 Pull Request 来帮助改进项目。
@@ -83,7 +92,7 @@ MIT License
 ### 模型下载与安装
 1. 创建模型存储目录：
 ```bash
-mkdir -p ./data/models
+mkdir -p ./models
 ```
 
 2. 下载模型文件：
@@ -98,43 +107,7 @@ mkdir -p ./data/models
 
 3. 目录结构应如下：
 ```
-./data/models/
-└── chinese-clip-vit-base-patch16/
-    ├── config.json
-    ├── pytorch_model.bin
-    ├── tokenizer.json
-    ├── tokenizer_config.json
-    └── vocab.txt
-```
-
-### 常见问题
-如果遇到 "模型文件不存在" 错误，请检查：
-1. 模型文件是否已正确下载
-2. 文件路径是否正确
-3. 文件名是否与配置匹配
-```
-
-## 模型配置说明
-
-### 模型下载与安装
-1. 创建模型存储目录：
-```bash
-mkdir -p ./data/models
-```
-
-2. 下载模型文件：
-   - 访问 [chinese-clip-vit-base-patch16](https://huggingface.co/OFA-Sys/chinese-clip-vit-base-patch16)
-   - 下载所有模型文件到 `./models/chinese-clip-vit-base-patch16` 目录
-   - 确保下载以下必要文件：
-     - config.json
-     - pytorch_model.bin
-     - tokenizer.json
-     - tokenizer_config.json
-     - vocab.txt
-
-3. 目录结构应如下：
-```
-./data/models/
+./models/
 └── chinese-clip-vit-base-patch16/
     ├── config.json
     ├── pytorch_model.bin
@@ -149,19 +122,6 @@ mkdir -p ./data/models
 2. 文件路径是否正确
 3. 文件名是否与配置匹配
 
-```txt
-PyQt6==6.5.0
-torch>=2.2.0
-torchvision>=0.17.0
-transformers>=4.27.0
-faiss-cpu>=1.7.4
-Pillow>=9.5.0
-SQLAlchemy>=2.0.15
-fastapi>=0.95.2
-uvicorn>=0.22.0
-python-multipart>=0.0.6
-numpy>=1.24.0 
-```
 
 # 安装说明
 
@@ -175,7 +135,7 @@ numpy>=1.24.0
 2. 双击打开DMG文件
 3. 将应用程序拖入Applications文件夹
 
-## Ubuntu/Debian
+## Debian/Ubuntu
 1. 下载 localmediasearch_1.0.0_amd64.deb
 2. 双击使用软件中心安装
    或使用命令行：
