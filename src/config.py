@@ -45,6 +45,11 @@ DB_NAME = config.get('Database', 'db_name', fallback='media_search.db')
 DB_DIR = get_path(config.get('Database', 'db_dir', fallback='./data/db'))
 DB_PATH = os.path.join(DB_DIR, DB_NAME)
 
+# 向量数据库配置
+VECTOR_DB_NAME = config.get('VectorDB', 'vector_db_name', fallback='vector_db')
+VECTOR_DB_DIR = get_path(config.get('VectorDB', 'vector_db_dir', fallback='./data/db'))
+VECTOR_DB_PATH = os.path.join(VECTOR_DB_DIR, VECTOR_DB_NAME)
+
 # 媒体文件配置
 IMAGE_EXTENSIONS = config.get('Media', 'image_extensions', fallback='.jpg,.jpeg,.png,.gif,.bmp').split(',')
 VIDEO_EXTENSIONS = config.get('Media', 'video_extensions', fallback='.mp4,.avi,.mov,.mkv,.wmv,.flv,.avi,.rmvb,.webm').split(',')
