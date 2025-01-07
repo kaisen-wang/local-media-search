@@ -1,21 +1,24 @@
-import torch
 from PIL import Image
+from typing import Union, List
+from src.config import MODEL_NAME, DEVICE, CACHE_DIR
 from transformers import ChineseCLIPProcessor, ChineseCLIPModel
 import cv2
+import torch
 import numpy as np
-from typing import Union, List
 import traceback
-from src.config import MODEL_NAME, DEVICE, CACHE_DIR
+import logging
+
+log = logging.getLogger(__name__)
 
 class FeatureExtractor:
     def __init__(self):
         try:
-            print("=== Starting Feature Extractor Initialization ===")
+            log.info("=== Starting Feature Extractor Initialization ===")
             
             # 初始化文本特征提取模型（ChineseCLIP）
-            print(f"Initializing ChineseCLIP for text and image features...")
-            print(f"Model: {MODEL_NAME}")
-            print(f"Device: {DEVICE}")
+            log.info(f"Initializing ChineseCLIP for text and image features...")
+            log.info(f"Model: {MODEL_NAME}")
+            log.info(f"Device: {DEVICE}")
             
             self.processor = ChineseCLIPProcessor.from_pretrained(
                 MODEL_NAME,
@@ -33,14 +36,14 @@ class FeatureExtractor:
             ).to(DEVICE)
             
             self.model.eval()
-            print("=== Initialization Complete ===")
+            log.info("=== Initialization Complete ===")
             
         except Exception as e:
-            print("\n=== Initialization Error ===")
-            print(f"Error type: {type(e).__name__}")
-            print(f"Error message: {str(e)}")
+            log.error("=== Initialization Error ===")
+            log.error(f"Error type: {type(e).__name__}")
+            log.error(f"Error message: {str(e)}")
             traceback.print_exc()
-            print("===========================")
+            log.error("===========================")
             raise
 
     def extract_image_features(self, image_path: str) -> np.ndarray:
@@ -65,17 +68,17 @@ class FeatureExtractor:
             return image_features.cpu().numpy()[0]
             
         except Exception as e:
-            print(f"\n=== Image Processing Error ===")
-            print(f"Error type: {type(e).__name__}")
-            print(f"Error message: {str(e)}")
+            log.error(f"=== Image Processing Error ===")
+            log.error(f"Error type: {type(e).__name__}")
+            log.error(f"Error message: {str(e)}")
             traceback.print_exc()
-            print("============================")
+            log.error("============================")
             return None
 
     def extract_text_features(self, text: Union[str, List[str]]) -> np.ndarray:
         """从文本中提取特征向量"""
         try:
-            print(f"\nProcessing text: {text}")
+            log.info(f"Processing text: {text}")
             
             if isinstance(text, str):
                 text = [text]
@@ -95,16 +98,16 @@ class FeatureExtractor:
                 # 归一化
                 text_features = text_features / text_features.norm(dim=-1, keepdim=True)
             
-            print("Text features extracted successfully")
+            log.info("Text features extracted successfully")
             return text_features.numpy()[0]
             
         except Exception as e:
-            print("\n=== Text Processing Error ===")
-            print(f"Error type: {type(e).__name__}")
-            print(f"Error message: {str(e)}")
-            print(f"Input text: {text}")
+            log.error("=== Text Processing Error ===")
+            log.error(f"Error type: {type(e).__name__}")
+            log.error(f"Error message: {str(e)}")
+            log.error(f"Input text: {text}")
             traceback.print_exc()
-            print("===========================")
+            log.error("===========================")
             return None
 
     def extract_frame_features(self, frame: np.ndarray) -> np.ndarray:
@@ -132,11 +135,11 @@ class FeatureExtractor:
             return image_features.cpu().numpy()[0]
             
         except Exception as e:
-            print(f"\n=== Frame Processing Error ===")
-            print(f"Error type: {type(e).__name__}")
-            print(f"Error message: {str(e)}")
+            log.error(f"=== Frame Processing Error ===")
+            log.error(f"Error type: {type(e).__name__}")
+            log.error(f"Error message: {str(e)}")
             traceback.print_exc()
-            print("============================")
+            log.error("============================")
             return None
 
     # def calculate_similarity(self, features1: np.ndarray, features2: np.ndarray) -> float:
@@ -157,11 +160,11 @@ class FeatureExtractor:
     #         return float(similarity)
             
     #     except Exception as e:
-    #         print("\n=== Similarity Computation Error ===")
-    #         print(f"Error type: {type(e).__name__}")
-    #         print(f"Error message: {str(e)}")
+    #         log.error("\n=== Similarity Computation Error ===")
+    #         log.error(f"Error type: {type(e).__name__}")
+    #         log.error(f"Error message: {str(e)}")
     #         traceback.print_exc()
-    #         print("==================================")
+    #         log.error("==================================")
     #         return 0.0
 
     def calculate_similarity(self, features1: np.ndarray, features2: np.ndarray) -> float:
@@ -186,9 +189,10 @@ class FeatureExtractor:
             return float(similarity.cpu())
             
         except Exception as e:
-            print("\n=== Similarity Computation Error ===")
-            print(f"Error type: {type(e).__name__}")
-            print(f"Error message: {str(e)}")
+            log.error("=== Similarity Computation Error ===")
+            log.error(f"Error type: {type(e).__name__}")
+            log.error(f"Error message: {str(e)}")
             traceback.print_exc()
-            print("==================================")
+            log.error("==================================")
             return 0.0
+

@@ -5,6 +5,7 @@ from PyQt6.QtGui import QPixmap, QIcon, QGuiApplication
 from src.core.indexer import Indexer
 from src.core.search_engine import SearchEngine
 import os
+import json
 import logging
 import subprocess
 from src.database.models import MediaFile, VideoFrame
@@ -410,7 +411,7 @@ class MainWindow(QMainWindow):
             self.progress_dialog = None
         
         # 重建搜索索引
-        self.search_engine.build_index()
+        # self.search_engine.build_index()
         
         # 显示结果统计
         message = (
@@ -442,7 +443,7 @@ class MainWindow(QMainWindow):
             self.search_engine.verify_database()
             
             # 重建搜索索引
-            self.search_engine.build_index()
+            # self.search_engine.build_index()
             
             # 关闭加载对话框
             self.loading_dialog.close()
@@ -464,7 +465,7 @@ class MainWindow(QMainWindow):
         self.search_engine.verify_database()
         
         # 重建搜索索引
-        self.search_engine.build_index()
+        # self.search_engine.build_index()
         
         # 显示统计信息
         message = (
@@ -521,7 +522,7 @@ class MainWindow(QMainWindow):
         self.search_engine.verify_database()
         
         # 重建搜索索引
-        self.search_engine.build_index()
+        # self.search_engine.build_index()
         
         QMessageBox.information(self, "完成", "索引建立完成！")
 
@@ -681,19 +682,23 @@ class MainWindow(QMainWindow):
         
         session = SQLiteDB().get_session()
         try:
-            for file_id, similarity, result_type, frame in results_to_display:
-                media_file = session.query(MediaFile).get(file_id)
+            for _index, item in enumerate(results_to_display):
+                score = item['score']
+                metadata = item['metadata']
+                print(f'metadata type is {type(metadata)}, metadata={metadata}')
+                media_file = session.query(MediaFile).get(metadata['id'])
                 if media_file and os.path.exists(media_file.file_path):
                     # 创建结果卡片
-                    result_card = self.create_result_card(media_file, similarity, result_type, frame)
+                    result_card = self.create_result_card(media_file, score, metadata)
                     self.results_layout.addWidget(result_card)
         finally:
             session.close()
         
         self.current_page += 1
 
-    def create_result_card(self, media_file, similarity, result_type, frame):
+    def create_result_card(self, media_file, similarity, metadata):
         """创建单个结果卡片"""
+        result_type = metadata['file_type']
         card = QWidget()
         # 设置宽度
         card.setFixedWidth(WINDOW_MIN_WIDTH - 60)
@@ -717,7 +722,7 @@ class MainWindow(QMainWindow):
         if result_type == 'image':
             thumbnail_path = media_file.file_path
         else:
-            thumbnail_path = frame.frame_path
+            thumbnail_path = metadata['file_path']
             
         thumbnail = ImageLabel(thumbnail_path) # QLabel()
         thumbnail.setAlignment(Qt.AlignmentFlag.AlignCenter)  # 设置标签居中对齐
@@ -738,7 +743,7 @@ class MainWindow(QMainWindow):
         
         # 文件名和类型
         filename = os.path.basename(media_file.file_path)
-        type_text = "视频" if result_type == 'video' else "图片"
+        type_text = "图片" if result_type == 'image' else "视频"
         name_label = QLabel(f"{filename} ({type_text})")
         name_label.setStyleSheet("font-weight: bold;")
         name_label.setAlignment(Qt.AlignmentFlag.AlignLeft)
@@ -751,8 +756,8 @@ class MainWindow(QMainWindow):
         info_layout.addWidget(similarity_label)
         
         # 视频时间戳
-        if result_type == 'video':
-            timestamp = frame.timestamp
+        if result_type == 'video' or result_type == 'video_frame':
+            timestamp = metadata['timestamp']
             time_label = QLabel(f"时间: {timestamp:.2f}秒")
             # time_label.setStyleSheet("color: #666;")
             info_layout.addWidget(time_label)
@@ -778,7 +783,7 @@ class MainWindow(QMainWindow):
             play_btn = QPushButton("播放片段")
             play_btn.setIcon(QIcon.fromTheme("media-playback-start"))
             play_btn.clicked.connect(
-                lambda: self.play_video_at_timestamp(media_file.file_path, frame.timestamp)
+                lambda: self.play_video_at_timestamp(media_file.file_path, metadata['timestamp'])
             )
             buttons_layout.addWidget(play_btn)
         

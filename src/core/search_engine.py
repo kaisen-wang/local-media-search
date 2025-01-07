@@ -3,6 +3,7 @@ import traceback
 from src.core.feature_extractor import FeatureExtractor
 from src.database.models import MediaFile, VideoFrame
 from src.database.sqlite_db import SQLiteDB
+from src.database.vector_db import VectorDB
 import os
 import json
 import logging
@@ -63,20 +64,48 @@ class SearchEngine:
             self.index_built = False
         finally:
             session.close()
+    def build_vector_db(self):
+        log.info("=== Building vector database ===")
+        self.index_built = False  # 重置状态标志
+        session = SQLiteDB().get_session()
+        try:
+            # 图片特征
+            images = session.query(MediaFile).filter_by(file_type='image').all()
+            log.info(f"Found {len(images)} images in database")
+            for media in images:
+                if media.file_type == 'image':
+                    image_path = media.file_path
+                    if os.path.exists(image_path):
+                        log.info(f"Processing image: {image_path}")
+                        VectorDB().add_feature_vector_media_file(media)
+
+            # 视频帧特征
+            frames = session.query(VideoFrame).all()
+            log.info(f"Found {len(frames)} video frames in database")
+            for frame in frames:
+                VectorDB().add_feature_vector_video_frame(frame)
+            
+            self.index_built = True  # 设置状态标志
+
+        except Exception as e:
+            log.error(f"Error retrieving media files from database: {str(e)}")
+            traceback.print_exc()
+            self.index_built = False
+        finally:
+            session.close()
 
     def _ensure_index_built(self):
         """确保索引已经构建"""
         if not self.index_built or len(self.index_cache) == 0:
-            log.info("Search index not built or empty, rebuilding...")
-            self.build_index()
+            log.info("搜索索引未构建或为空，正在重建...")
+            # self.build_index()
+            # self.index_cache["null"] = []
+            # self.build_vector_db()
 
-    def text_search(self, query_text: str) -> List[Tuple]:
+    def text_search(self, query_text: str, page_number: int = 1, page_size: int = 20) -> List[Tuple]:
         """文本搜索"""
         try:
             self._ensure_index_built()  # 确保索引已构建
-            log.info("=== Performing text search ===")
-            log.info(f"Query text: {query_text}")
-            log.info(f"Current index size: {len(self.index_cache)}")
             
             # 提取文本特征
             query_features = self.feature_extractor.extract_text_features(query_text)
@@ -85,20 +114,17 @@ class SearchEngine:
                 return []
 
             log.info("Successfully extracted text features")
-            return self._search_with_features(query_features)
+            return self._search_with_features(query_features, page_number = page_number, page_size = page_size)
 
         except Exception as e:
             log.info(f"Error in text search: {str(e)}")
             traceback.print_exc()
             return []
 
-    def image_search(self, query_image_path: str) -> List[Tuple]:
+    def image_search(self, query_image_path: str, page_number: int = 1, page_size: int = 20) -> List[Tuple]:
         """图像搜索"""
         try:
             self._ensure_index_built()  # 确保索引已构建
-            log.info(f"=== Performing image search ===")
-            log.info(f"Query image: {query_image_path}")
-            log.info(f"Current index size: {len(self.index_cache)}")
             
             # 提取图像特征
             query_features = self.feature_extractor.extract_image_features(query_image_path)
@@ -107,14 +133,14 @@ class SearchEngine:
                 return []
 
             log.info("Successfully extracted image features")
-            return self._search_with_features(query_features)
+            return self._search_with_features(query_features, page_number = page_number, page_size = page_size)
 
         except Exception as e:
             log.info(f"Error in image search: {str(e)}")
             traceback.print_exc()
             return []
 
-    def _search_with_features(self, query_features: np.ndarray) -> List[Tuple]:
+    def _search_with_features(self, query_features: np.ndarray, page_number: int = 1, page_size: int = 20) -> List[Tuple]:
         """使用特征向量搜索"""
         try:
             results = []
@@ -122,34 +148,35 @@ class SearchEngine:
             
             log.info("Calculating similarities...")
             # 使用缓存的特征向量进行批量计算
-            for key, features in self.index_cache.items():
-                try:
-                    # 打印特征向量的形状以进行调试
-                    log.info(f"Query features shape: {query_features.shape}")
-                    log.info(f"Index features shape for {key}: {features.shape}")
+            # for key, features in self.index_cache.items():
+            #     try:
+            #         # 打印特征向量的形状以进行调试
+            #         log.info(f"Query features shape: {query_features.shape}")
+            #         log.info(f"Index features shape for {key}: {features.shape}")
                     
-                    similarity = self.feature_extractor.calculate_similarity(query_features, features)
+            #         similarity = self.feature_extractor.calculate_similarity(query_features, features)
                     
-                    log.info(f"Similarity for {key}: {similarity}")
+            #         log.info(f"Similarity for {key}: {similarity}")
                     
-                    if similarity >= self.similarity_threshold:
-                        if key.startswith('image_'):
-                            media_id = int(key.split('_')[1])
-                            media_file = session.query(MediaFile).get(media_id)
-                            if media_file and os.path.exists(media_file.file_path):
-                                results.append((media_id, similarity, 'image', None))
-                        else:  # frame
-                            frame_id = int(key.split('_')[1])
-                            frame = session.query(VideoFrame).get(frame_id)
-                            if frame and os.path.exists(frame.frame_path):
-                                results.append((frame.media_file_id, similarity, 'video', frame))
+            #         if similarity >= self.similarity_threshold:
+            #             if key.startswith('image_'):
+            #                 media_id = int(key.split('_')[1])
+            #                 media_file = session.query(MediaFile).get(media_id)
+            #                 if media_file and os.path.exists(media_file.file_path):
+            #                     results.append((media_id, similarity, 'image', None))
+            #             else:  # frame
+            #                 frame_id = int(key.split('_')[1])
+            #                 frame = session.query(VideoFrame).get(frame_id)
+            #                 if frame and os.path.exists(frame.frame_path):
+            #                     results.append((frame.media_file_id, similarity, 'video', frame))
+            #     except Exception as e:
+            #         log.error(f"Error processing {key}: {str(e)}")
+            #         continue
 
-                except Exception as e:
-                    log.error(f"Error processing {key}: {str(e)}")
-                    continue
+            # # 按相似度排序
+            # results = sorted(results, key=lambda x: x.score, reverse=True)
 
-            # 按相似度排序
-            results.sort(key=lambda x: x[1], reverse=True)
+            results = VectorDB().query(query_features.tolist(), page_number = page_number, page_size = page_size)
             return results
         except Exception as e:
             log.error(f"Error in feature search: {str(e)}")

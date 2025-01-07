@@ -3,7 +3,7 @@ import logging
 from PyQt6.QtWidgets import QApplication, QMessageBox
 from PyQt6.QtGui import QIcon
 from src.gui.main_window import MainWindow
-from src.database.models import init_db
+from src.database.init import init_db
 from src.config import setup_logging, LOGGER_LEVEL
 
 def initialize_app():

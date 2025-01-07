@@ -2,14 +2,7 @@ from sqlalchemy import Column, Integer, String, Float, DateTime
 from sqlalchemy.orm import relationship
 from sqlalchemy import ForeignKey
 from datetime import datetime
-from .vector_db import VectorDB
-from .sqlite_db import SQLiteDB
 from .base import Base
-
-# 初始化数据库
-def init_db() -> None:
-    SQLiteDB()
-    VectorDB()
 
 class MediaFile(Base):
     __tablename__ = 'media_files'

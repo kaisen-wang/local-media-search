@@ -2,6 +2,7 @@ from src.core.file_scanner import FileScanner
 from src.core.feature_extractor import FeatureExtractor
 from src.database.models import MediaFile, VideoFrame
 from src.database.sqlite_db import SQLiteDB
+from src.database.vector_db import VectorDB
 from src.config import CACHE_DIR
 from typing import List
 import numpy as np
@@ -10,6 +11,9 @@ import json
 import cv2
 import os
 import traceback
+import logging
+
+log = logging.getLogger(__name__)
 
 class Indexer:
     def __init__(self):
@@ -31,7 +35,7 @@ class Indexer:
                     if future.result():
                         indexed_files.append(file_path)
                 except Exception as e:
-                    print(f"Error indexing file {file_path}: {str(e)}")
+                    log.error(f"Error indexing file {file_path}: {str(e)}")
 
         return indexed_files
 
@@ -47,7 +51,7 @@ class Indexer:
                 return self._index_video(file_path)
     
         except Exception as e:
-            print(f"Error indexing file {file_path}: {str(e)}")
+            log.error(f"Error indexing file {file_path}: {str(e)}")
             return False
     
         return False
@@ -55,20 +59,22 @@ class Indexer:
     def _index_image(self, file_path: str) -> bool:
         """索引图片文件"""
         try:
-            print(f"\n=== Indexing image: {file_path} ===")
+            log.info(f"=== Indexing image: {file_path} ===")
             features = self.feature_extractor.extract_image_features(file_path)
             
             if features is not None:
                 # 验证特征向量
                 if not isinstance(features, np.ndarray):
-                    print(f"Invalid feature type: {type(features)}")
+                    log.info(f"Invalid feature type: {type(features)}")
                     return False
                     
                 if len(features.shape) != 1:
-                    print(f"Invalid feature shape: {features.shape}")
+                    log.info(f"Invalid feature shape: {features.shape}")
                     return False
                 
-                print(f"Feature vector shape: {features.shape}")
+                log.info(f"Feature vector shape: {features.shape}")
+
+                session = SQLiteDB().get_session()
                 
                 # 将特征向量转换为列表并保存
                 feature_list = features.tolist()
@@ -78,26 +84,32 @@ class Indexer:
                     feature_vector=json.dumps(feature_list)
                 )
                 
-                self.batch_insert([media_file])
-                print(f"Successfully indexed image: {file_path}")
+                session.add(media_file)
+                session.flush()
+                session.commit()
+                session.close()
+
+                VectorDB().add_feature_vector_media_file(media_file)
+
+                log.info(f"Successfully indexed image: {file_path}")
                 return True
                 
             else:
-                print(f"Failed to extract features from image: {file_path}")
+                log.info(f"Failed to extract features from image: {file_path}")
                 return False
                 
         except Exception as e:
-            print(f"Error indexing image {file_path}: {str(e)}")
+            log.error(f"Error indexing image {file_path}: {str(e)}")
             traceback.print_exc()
             return False
 
     def _index_video(self, file_path: str) -> bool:
         """索引视频文件"""
         try:
-            print(f"\n=== Indexing video: {file_path} ===")
+            log.info(f"=== Indexing video: {file_path} ===")
             cap = cv2.VideoCapture(file_path)
             if not cap.isOpened():
-                print(f"Could not open video file: {file_path}")
+                log.info(f"Could not open video file: {file_path}")
                 return False
 
             # 获取视频信息
@@ -106,7 +118,7 @@ class Indexer:
             frame_interval = int(fps / self.frame_interval)  # 每隔多少帧提取一帧
             
             if fps <= 0 or total_frames <= 0:
-                print(f"Invalid video metadata: fps={fps}, total_frames={total_frames}")
+                log.info(f"Invalid video metadata: fps={fps}, total_frames={total_frames}")
                 return False
 
             # 创建视频文件记录
@@ -150,11 +162,11 @@ class Indexer:
                             if features is not None:
                                 # 验证特征向量
                                 if not isinstance(features, np.ndarray):
-                                    print(f"Invalid feature type for frame {frame_count}")
+                                    log.info(f"Invalid feature type for frame {frame_count}")
                                     continue
                                     
                                 if len(features.shape) != 1:
-                                    print(f"Invalid feature shape for frame {frame_count}: {features.shape}")
+                                    log.info(f"Invalid feature shape for frame {frame_count}: {features.shape}")
                                     continue
                                 
                                 # 将特征向量转换为列表并保存
@@ -171,7 +183,7 @@ class Indexer:
                                 successful_frames += 1
 
                         except Exception as e:
-                            print(f"Error processing frame {frame_count}: {str(e)}")
+                            log.error(f"Error processing frame {frame_count}: {str(e)}")
                             if os.path.exists(frame_path):
                                 os.remove(frame_path)
                             continue
@@ -184,13 +196,14 @@ class Indexer:
                     if os.path.exists(frames_dir):
                         import shutil
                         shutil.rmtree(frames_dir)
-                    print(f"No frames were successfully processed for {file_path}")
+                    log.info(f"No frames were successfully processed for {file_path}")
                     return False
 
                 # 批量保存帧记录
                 session.bulk_save_objects(frames_data)
                 session.commit()
-                print(f"Successfully indexed video {file_path} with {successful_frames} frames")
+                log.info(f"Successfully indexed video {file_path} with {successful_frames} frames")
+                self.batch_vector_video_frames_insert(media_file.id)
                 return True
 
             except Exception as e:
@@ -199,7 +212,7 @@ class Indexer:
                 if os.path.exists(frames_dir):
                     import shutil
                     shutil.rmtree(frames_dir)
-                print(f"Error indexing video {file_path}: {str(e)}")
+                log.error(f"Error indexing video {file_path}: {str(e)}")
                 return False
             
             finally:
@@ -207,17 +220,23 @@ class Indexer:
                 cap.release()
 
         except Exception as e:
-            print(f"Error indexing video {file_path}: {str(e)}")
+            log.error(f"Error indexing video {file_path}: {str(e)}")
             return False
 
-    def batch_insert(self, media_files: List[MediaFile]):
-        """批量插入数据库记录"""
+    def batch_vector_video_frames_insert(self, media_file_id: int):
+        """批量插入向量数据库"""
+        if not media_file_id:
+            return False
         session = SQLiteDB().get_session()
         try:
-            session.bulk_save_objects(media_files)
-            session.commit()
+            frames = session.query(VideoFrame).filter_by(media_file_id = media_file_id).all()
+            
+            for video_frame in frames:
+                VectorDB().add_feature_vector_video_frame(video_frame)
+
         except Exception as e:
             session.rollback()
-            print(f"Error during batch insert: {str(e)}")
+            log.error(f"Error during batch insert: {str(e)}")
         finally:
             session.close()
+    
