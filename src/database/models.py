@@ -4,6 +4,15 @@ from sqlalchemy import ForeignKey
 from datetime import datetime
 from .base import Base
 
+class FilePath(Base):
+    __tablename__ = 'file_paths'
+
+    id = Column(Integer, primary_key=True)
+    file_path = Column(String, unique=True, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    last_modified = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+
 class MediaFile(Base):
     __tablename__ = 'media_files'
 

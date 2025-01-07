@@ -439,8 +439,6 @@ class MainWindow(QMainWindow):
             self.loading_dialog.setCancelButton(None)  # 禁用取消按钮
             self.loading_dialog.show()
             
-            # 验证数据库
-            self.search_engine.verify_database()
             
             # 重建搜索索引
             # self.search_engine.build_index()
@@ -460,9 +458,6 @@ class MainWindow(QMainWindow):
         """索引完成处理"""
         if hasattr(self, 'progress_dialog') and self.progress_dialog:
             self.progress_dialog.close()
-        
-        # 验证数据库
-        self.search_engine.verify_database()
         
         # 重建搜索索引
         # self.search_engine.build_index()
@@ -517,9 +512,6 @@ class MainWindow(QMainWindow):
         """索引完成处理"""
         if self.progress_dialog:
             self.progress_dialog.close()
-        
-        # 验证数据库
-        self.search_engine.verify_database()
         
         # 重建搜索索引
         # self.search_engine.build_index()

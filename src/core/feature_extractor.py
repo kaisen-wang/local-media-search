@@ -142,31 +142,6 @@ class FeatureExtractor:
             log.error("============================")
             return None
 
-    # def calculate_similarity(self, features1: np.ndarray, features2: np.ndarray) -> float:
-    #     """计算两个特征向量之间的相似度"""
-    #     try:
-    #         if features1 is None or features2 is None:
-    #             return 0.0
-            
-    #         # 确保向量已经归一化
-    #         features1_norm = features1 / np.linalg.norm(features1)
-    #         features2_norm = features2 / np.linalg.norm(features2)
-            
-    #         # 计算余弦相似度
-    #         similarity = np.dot(features1_norm, features2_norm)
-    #         similarity = max(-1.0, min(1.0, similarity))  # 限制在 [-1, 1] 范围内
-    #         similarity = (similarity + 1) / 2  # 转换到 [0, 1] 范围
-            
-    #         return float(similarity)
-            
-    #     except Exception as e:
-    #         log.error("\n=== Similarity Computation Error ===")
-    #         log.error(f"Error type: {type(e).__name__}")
-    #         log.error(f"Error message: {str(e)}")
-    #         traceback.print_exc()
-    #         log.error("==================================")
-    #         return 0.0
-
     def calculate_similarity(self, features1: np.ndarray, features2: np.ndarray) -> float:
         """计算两个特征向量之间的相似度"""
         try:
