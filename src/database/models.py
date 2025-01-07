@@ -1,18 +1,15 @@
-import os
 from sqlalchemy import Column, Integer, String, Float, DateTime
-from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
 from sqlalchemy import ForeignKey
-from typing import List
 from datetime import datetime
 from .vector_db import VectorDB
 from .sqlite_db import SQLiteDB
-
-Base = declarative_base()
+from .base import Base
 
 # 初始化数据库
-SQLITE_DB = SQLiteDB()
-VECTOR_DB = VectorDB()
+def init_db() -> None:
+    SQLiteDB()
+    VectorDB()
 
 class MediaFile(Base):
     __tablename__ = 'media_files'

@@ -1,8 +1,10 @@
 import sys
+import logging
 from PyQt6.QtWidgets import QApplication, QMessageBox
 from PyQt6.QtGui import QIcon
 from src.gui.main_window import MainWindow
 from src.database.models import init_db
+from src.config import setup_logging, LOGGER_LEVEL
 
 def initialize_app():
     """初始化应用程序"""
@@ -19,6 +21,10 @@ def initialize_app():
         return False
 
 def main():
+    # 初始化日志
+    setup_logging(LOGGER_LEVEL)
+    logger = logging.getLogger(__name__)
+    
     # 创建应用实例
     app = QApplication(sys.argv)
     
@@ -37,12 +43,14 @@ def main():
         window = MainWindow()
         window.show()
         
-        # 打印确认信息
-        print("GUI window should be visible now...")
+        # 记录主窗口显示
+        logger.info("主窗口已显示")
         
         # 启动事件循环
+        logger.info("启动应用程序事件循环")
         return app.exec()
     except Exception as e:
+        logger.error(f"应用程序运行出错: ", e, exc_info=True)
         QMessageBox.critical(
             None,
             "错误",
@@ -51,4 +59,4 @@ def main():
         return 1
 
 if __name__ == "__main__":
-    sys.exit(main()) 
+    sys.exit(main())

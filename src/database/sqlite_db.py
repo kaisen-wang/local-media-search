@@ -1,14 +1,18 @@
 import os
+import logging
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 from src.config import DB_PATH
-from .models import Base
+from .base import Base
+
+logger = logging.getLogger(__name__)
 
 class SQLiteDB:
     _instance = None
 
     def __new__(cls):
         if not cls._instance:
+            logger.info("Creating new SQLiteDB instance")
             cls._instance = super(SQLiteDB, cls).__new__(cls)
             cls._instance._init_db()
         return cls._instance
@@ -27,13 +31,13 @@ class SQLiteDB:
                     with open(self.db_path, 'a'):
                         pass
                 except PermissionError:
-                    print(f"No write permission for {self.db_path}, attempting to remove...")
+                    logging.error(f"No write permission for {self.db_path}, attempting to remove...")
                     os.remove(self.db_path)
-                    print(f"Removed old database at {self.db_path}")
+                    logging.error(f"Removed old database at {self.db_path}")
             
             # 创建新的数据库和表
             Base.metadata.create_all(self.engine)
-            print(f"Created new database at {self.db_path}")
+            logging.info(f"Created new database at {self.db_path}")
             
             # 设置数据库文件权限为 600 (只有用户可以读写)
             os.chmod(self.db_path, 0o600)
@@ -43,16 +47,14 @@ class SQLiteDB:
             try:
                 session.execute(text("SELECT 1"))
                 session.commit()
-                print("Database connection test successful")
+                logging.info("Database connection test successful")
             finally:
                 session.close()
             
         except Exception as e:
-            print(f"Error initializing database: {str(e)}")
+            logging.error(f"Error initializing database: {str(e)}")
             raise
 
     def get_session(self):
         """获取新的数据库会话"""
         return self.Session()
-
-

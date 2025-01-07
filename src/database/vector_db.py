@@ -1,23 +1,23 @@
+import logging
 import chromadb
-from chromadb.config import Settings
 from typing import List, Optional
 from src.config import VECTOR_DB_PATH
+
+logger = logging.getLogger(__name__)
 
 class VectorDB:
     _instance = None
 
     def __new__(cls):
         if cls._instance is None:
+            logger.info("Creating new instance of VectorDB")
             cls._instance = super(VectorDB, cls).__new__(cls)
             cls._instance._init_db()
         return cls._instance
 
     def _init_db(self) -> None:
         """初始化向量数据库"""
-        self.client = chromadb.Client(Settings(
-            chroma_db_impl="duckdb+parquet",
-            persist_directory=VECTOR_DB_PATH
-        ))
+        self.client = chromadb.PersistentClient(path = VECTOR_DB_PATH)
 
     def create_collection(self, name: str) -> None:
         """创建新的集合"""

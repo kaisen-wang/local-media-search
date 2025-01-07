@@ -1,6 +1,7 @@
 from src.core.file_scanner import FileScanner
 from src.core.feature_extractor import FeatureExtractor
-from src.database.models import Session, MediaFile, VideoFrame
+from src.database.models import MediaFile, VideoFrame
+from src.database.sqlite_db import SQLiteDB
 from src.config import CACHE_DIR
 from typing import List
 import numpy as np
@@ -119,7 +120,7 @@ class Indexer:
                 })
             )
 
-            session = Session()
+            session = SQLiteDB().get_session()
             try:
                 # 保存视频文件记录
                 session.add(media_file)
@@ -211,7 +212,7 @@ class Indexer:
 
     def batch_insert(self, media_files: List[MediaFile]):
         """批量插入数据库记录"""
-        session = Session()
+        session = SQLiteDB().get_session()
         try:
             session.bulk_save_objects(media_files)
             session.commit()

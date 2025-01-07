@@ -1,10 +1,14 @@
-import numpy as np
-import json
 from typing import List, Tuple
 import traceback
 from src.core.feature_extractor import FeatureExtractor
-from src.database.models import Session, MediaFile, VideoFrame
+from src.database.models import MediaFile, VideoFrame
+from src.database.sqlite_db import SQLiteDB
 import os
+import json
+import logging
+import numpy as np
+
+log = logging.getLogger(__name__)
 
 class SearchEngine:
     def __init__(self):
@@ -15,8 +19,8 @@ class SearchEngine:
 
     def build_index(self):
         """构建搜索索引并缓存特征向量"""
-        print("\n=== Building search index ===")
-        session = Session()
+        log.info("=== Building search index ===")
+        session = SQLiteDB().get_session()
         try:
             # 清空现有缓存
             self.index_cache.clear()
@@ -24,7 +28,7 @@ class SearchEngine:
             
             # 缓存图片特征
             images = session.query(MediaFile).filter_by(file_type='image').all()
-            print(f"Found {len(images)} images in database")
+            log.info(f"Found {len(images)} images in database")
             
             for img in images:
                 if img.feature_vector:
@@ -34,11 +38,11 @@ class SearchEngine:
                         if features is not None and len(features) > 0:
                             self.index_cache[f"image_{img.id}"] = features
                     except Exception as e:
-                        print(f"Error loading feature vector for image {img.id}: {str(e)}")
+                        log.error(f"Error loading feature vector for image {img.id}: {str(e)}")
 
             # 缓存视频帧特征
             frames = session.query(VideoFrame).all()
-            print(f"Found {len(frames)} video frames in database")
+            log.info(f"Found {len(frames)} video frames in database")
             
             for frame in frames:
                 if frame.feature_vector:
@@ -48,13 +52,13 @@ class SearchEngine:
                         if features is not None and len(features) > 0:
                             self.index_cache[f"frame_{frame.id}"] = features
                     except Exception as e:
-                        print(f"Error loading feature vector for frame {frame.id}: {str(e)}")
+                        log.error(f"Error loading feature vector for frame {frame.id}: {str(e)}")
 
-            print(f"Successfully cached {len(self.index_cache)} feature vectors")
+            log.info(f"Successfully cached {len(self.index_cache)} feature vectors")
             self.index_built = True  # 设置状态标志
             
         except Exception as e:
-            print(f"Error building index: {str(e)}")
+            log.error(f"Error building index: {str(e)}")
             traceback.print_exc()
             self.index_built = False
         finally:
@@ -63,28 +67,28 @@ class SearchEngine:
     def _ensure_index_built(self):
         """确保索引已经构建"""
         if not self.index_built or len(self.index_cache) == 0:
-            print("Search index not built or empty, rebuilding...")
+            log.info("Search index not built or empty, rebuilding...")
             self.build_index()
 
     def text_search(self, query_text: str) -> List[Tuple]:
         """文本搜索"""
         try:
             self._ensure_index_built()  # 确保索引已构建
-            print(f"\n=== Performing text search ===")
-            print(f"Query text: {query_text}")
-            print(f"Current index size: {len(self.index_cache)}")
+            log.info("=== Performing text search ===")
+            log.info(f"Query text: {query_text}")
+            log.info(f"Current index size: {len(self.index_cache)}")
             
             # 提取文本特征
             query_features = self.feature_extractor.extract_text_features(query_text)
             if query_features is None:
-                print("Failed to extract text features")
+                log.info("Failed to extract text features")
                 return []
 
-            print("Successfully extracted text features")
+            log.info("Successfully extracted text features")
             return self._search_with_features(query_features)
 
         except Exception as e:
-            print(f"Error in text search: {str(e)}")
+            log.info(f"Error in text search: {str(e)}")
             traceback.print_exc()
             return []
 
@@ -92,21 +96,21 @@ class SearchEngine:
         """图像搜索"""
         try:
             self._ensure_index_built()  # 确保索引已构建
-            print(f"\n=== Performing image search ===")
-            print(f"Query image: {query_image_path}")
-            print(f"Current index size: {len(self.index_cache)}")
+            log.info(f"=== Performing image search ===")
+            log.info(f"Query image: {query_image_path}")
+            log.info(f"Current index size: {len(self.index_cache)}")
             
             # 提取图像特征
             query_features = self.feature_extractor.extract_image_features(query_image_path)
             if query_features is None:
-                print("Failed to extract image features")
+                log.info("Failed to extract image features")
                 return []
 
-            print("Successfully extracted image features")
+            log.info("Successfully extracted image features")
             return self._search_with_features(query_features)
 
         except Exception as e:
-            print(f"Error in image search: {str(e)}")
+            log.info(f"Error in image search: {str(e)}")
             traceback.print_exc()
             return []
 
@@ -114,19 +118,19 @@ class SearchEngine:
         """使用特征向量搜索"""
         try:
             results = []
-            session = Session()
+            session = SQLiteDB().get_session()
             
-            print("\nCalculating similarities...")
+            log.info("Calculating similarities...")
             # 使用缓存的特征向量进行批量计算
             for key, features in self.index_cache.items():
                 try:
                     # 打印特征向量的形状以进行调试
-                    print(f"Query features shape: {query_features.shape}")
-                    print(f"Index features shape for {key}: {features.shape}")
+                    log.info(f"Query features shape: {query_features.shape}")
+                    log.info(f"Index features shape for {key}: {features.shape}")
                     
                     similarity = self.feature_extractor.calculate_similarity(query_features, features)
                     
-                    print(f"Similarity for {key}: {similarity}")
+                    log.info(f"Similarity for {key}: {similarity}")
                     
                     if similarity >= self.similarity_threshold:
                         if key.startswith('image_'):
@@ -141,14 +145,14 @@ class SearchEngine:
                                 results.append((frame.media_file_id, similarity, 'video', frame))
 
                 except Exception as e:
-                    print(f"Error processing {key}: {str(e)}")
+                    log.error(f"Error processing {key}: {str(e)}")
                     continue
 
             # 按相似度排序
             results.sort(key=lambda x: x[1], reverse=True)
             return results
         except Exception as e:
-            print(f"Error in feature search: {str(e)}")
+            log.error(f"Error in feature search: {str(e)}")
             traceback.print_exc()
             return []
         finally:
@@ -156,12 +160,12 @@ class SearchEngine:
 
     def verify_database(self):
         """验证数据库中的特征向量"""
-        print("\n=== Verifying database ===")
-        session = Session()
+        log.info("=== Verifying database ===")
+        session = SQLiteDB().get_session()
         try:
             # 验证图片特征
             images = session.query(MediaFile).filter_by(file_type='image').all()
-            print(f"Found {len(images)} images in database")
+            log.info(f"Found {len(images)} images in database")
             valid_images = 0
             
             for img in images:
@@ -171,15 +175,15 @@ class SearchEngine:
                         if features is not None and len(features.shape) == 1:
                             valid_images += 1
                         else:
-                            print(f"Invalid feature shape for image {img.id}: {features.shape}")
+                            log.info(f"Invalid feature shape for image {img.id}: {features.shape}")
                 except Exception as e:
-                    print(f"Error verifying image {img.id}: {str(e)}")
+                    log.error(f"Error verifying image {img.id}: {str(e)}")
             
-            print(f"Valid images: {valid_images}/{len(images)}")
+            log.info(f"Valid images: {valid_images}/{len(images)}")
             
             # 验证视频帧特征
             frames = session.query(VideoFrame).all()
-            print(f"Found {len(frames)} video frames in database")
+            log.info(f"Found {len(frames)} video frames in database")
             valid_frames = 0
             
             for frame in frames:
@@ -189,11 +193,11 @@ class SearchEngine:
                         if features is not None and len(features.shape) == 1:
                             valid_frames += 1
                         else:
-                            print(f"Invalid feature shape for frame {frame.id}: {features.shape}")
+                            log.info(f"Invalid feature shape for frame {frame.id}: {features.shape}")
                 except Exception as e:
-                    print(f"Error verifying frame {frame.id}: {str(e)}")
+                    log.error(f"Error verifying frame {frame.id}: {str(e)}")
             
-            print(f"Valid frames: {valid_frames}/{len(frames)}")
+            log.info(f"Valid frames: {valid_frames}/{len(frames)}")
             
         finally:
             session.close()

@@ -2,6 +2,8 @@ import os
 import torch
 import platform
 import configparser
+import logging
+from logging.handlers import RotatingFileHandler
 
 # 读取 config.ini 文件
 config = configparser.ConfigParser()
@@ -30,11 +32,43 @@ def get_os():
     else:
         raise ValueError("Unsupported OS")
 
+# 配置日志
+def setup_logging(logger_level = 'INFO'):
+    """配置日志记录"""
+    log_dir = os.path.join(CACHE_DIR, 'logs')
+    os.makedirs(log_dir, exist_ok=True)
+    
+    # 日志格式
+    log_format = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    formatter = logging.Formatter(log_format)
+    
+    # 文件日志 - 最大10MB，保留3个备份
+    file_handler = RotatingFileHandler(
+        os.path.join(log_dir, 'runtime.log'),
+        maxBytes=10*1024*1024,
+        backupCount=3,
+        encoding='utf-8'
+    )
+    file_handler.setFormatter(formatter)
+    
+    # 控制台日志
+    console_handler = logging.StreamHandler()
+    console_handler.setFormatter(formatter)
+    
+    # 根日志配置
+    level = getattr(logging, logger_level)
+    root_logger = logging.getLogger()
+    root_logger.setLevel(level)
+    root_logger.addHandler(file_handler)
+    root_logger.addHandler(console_handler)
+    print(f"Logging level set to {str(logging.getLevelName(level))}")
+
 # 获取当前操作系统
 CURRENT_OS = get_os()
 
 # 缓存配置
 CACHE_DIR = get_path(config.get('Cache', 'cache_dir', fallback='./data/cache'))
+LOGGER_LEVEL = config.get('Cache', 'logger_level', fallback='INFO')
 
 # 模型配置
 DEVICE = get_device()
@@ -46,7 +80,7 @@ DB_DIR = get_path(config.get('Database', 'db_dir', fallback='./data/db'))
 DB_PATH = os.path.join(DB_DIR, DB_NAME)
 
 # 向量数据库配置
-VECTOR_DB_NAME = config.get('VectorDB', 'vector_db_name', fallback='vector_db')
+VECTOR_DB_NAME = config.get('VectorDB', 'vector_db_name', fallback='media_search_vector_db')
 VECTOR_DB_DIR = get_path(config.get('VectorDB', 'vector_db_dir', fallback='./data/db'))
 VECTOR_DB_PATH = os.path.join(VECTOR_DB_DIR, VECTOR_DB_NAME)
 
@@ -66,10 +100,13 @@ THUMBNAIL_SIZE = config.getint('Window', 'thumbnail_size', fallback=200)
 # 创建必要的目录
 os.makedirs(DB_DIR, exist_ok=True)
 os.makedirs(CACHE_DIR, exist_ok=True)
+os.makedirs(VECTOR_DB_DIR, exist_ok=True)
 
 print(f"Configuration loaded:")
+print(f"- Logger level: {LOGGER_LEVEL}")
 print(f"- OS: {CURRENT_OS}")
 print(f"- Device: {DEVICE}")
 print(f"- Model: {MODEL_NAME}")
 print(f"- Database path: {DB_PATH}")
-print(f"- Cache directory: {CACHE_DIR}") 
+print(f"- VectorDB path: {VECTOR_DB_PATH}")
+print(f"- Cache directory: {CACHE_DIR}")
