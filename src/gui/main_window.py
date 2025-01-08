@@ -5,16 +5,14 @@ from PyQt6.QtGui import QPixmap, QIcon, QGuiApplication
 from src.core.indexer import Indexer
 from src.core.search_engine import SearchEngine
 import os
-import json
 import logging
 import subprocess
-from src.database.models import MediaFile, VideoFrame
-from src.database.sqlite_db import SQLiteDB
+from src.database.models import FilePathDao, MediaFileDao, VideoFrameDao
 import concurrent.futures
 from src.config import CURRENT_OS, WINDOW_TITLE, WINDOW_MIN_WIDTH, WINDOW_MIN_HEIGHT
 import traceback
 
-logging = logging.getLogger(__name__)
+log = logging.getLogger(__name__)
 
 class IndexingWorker(QThread):
     """后台索引线程"""
@@ -29,10 +27,16 @@ class IndexingWorker(QThread):
 
     def run(self):
         try:
+            # 添加索引路径
+            FilePathDao.add_file_path(self.folder)
+
             # 首先扫描所有文件
             media_files = self.indexer.file_scanner.scan_directory(self.folder)
             total_files = len(media_files)
             indexed_files = []
+
+            # 发送进度信号
+            self.progress.emit(0, total_files)
 
             # 使用线程池并行处理文件
             with concurrent.futures.ThreadPoolExecutor() as executor:
@@ -43,7 +47,7 @@ class IndexingWorker(QThread):
                         if future.result():
                             indexed_files.append(file_path)
                     except Exception as e:
-                        logging.error(f"Error indexing file {file_path}: {str(e)}")
+                        log.error(f"Error indexing file {file_path}: {str(e)}")
 
                     # 发送进度信号
                     self.progress.emit(i, total_files)
@@ -92,7 +96,7 @@ class ImageLabel(QLabel):
                 self.setText("无法加载图片")
         except Exception as e:
             self.setText("加载错误")
-            logging.error(f"Error loading image {self.file_path}: {str(e)}")
+            log.error(f"Error loading image {self.file_path}: {str(e)}")
 
     def mousePressEvent(self, event):
         """处理鼠标点击事件"""
@@ -126,43 +130,38 @@ class RefreshWorker(QThread):
                 'removed': 0   # 删除文件数
             }
             
-            session = SQLiteDB().get_session()
-            try:
-                for folder in self.folders:
-                    # 获取文件夹中的所有文件
-                    current_files = set(self.indexer.file_scanner.scan_directory(folder))
+            for folder in self.folders:
+                # 获取文件夹中的所有文件
+                current_files = set(self.indexer.file_scanner.scan_directory(folder))
                     
-                    # 获取数据库中该文件夹的所有文件
-                    db_files = set(
-                        path[0] for path in 
-                        session.query(MediaFile.file_path)
-                        .filter(MediaFile.file_path.like(f"{folder}%"))
-                        .all()
-                    )
+                # 获取数据库中该文件夹的所有文件
+                db_files = set(MediaFileDao.get_media_files_by_folder(folder))
                     
-                    # 计算需要添加、删除的文件
-                    files_to_add = current_files - db_files
-                    files_to_remove = db_files - current_files
+                # 计算需要添加、删除的文件
+                files_to_add = current_files - db_files
+                files_to_remove = db_files - current_files
                     
-                    # 删除不存在的文件记录
-                    for file_path in files_to_remove:
-                        session.query(MediaFile).filter_by(file_path=file_path).delete()
-                        stats['removed'] += 1
-                    
-                    # 添加新文件
-                    total_files = len(files_to_add)
-                    for i, file_path in enumerate(files_to_add, 1):
-                        if self.indexer.index_single_file(file_path):
-                            stats['added'] += 1
-                        self.progress.emit(folder, i, total_files)
-                    
-                    session.commit()
-                    
-                self.finished.emit(stats)
-                
-            finally:
-                session.close()
-                
+                # 删除不存在的文件记录
+                for file_path in files_to_remove:
+                    mf_list = MediaFileDao.get_media_files_by_file_path(file_path)
+                    for mf in mf_list:
+                        if mf.file_type == 'video':
+                            vf_list = VideoFrameDao.get_video_frames_by_media_file_id(mf.id)
+                            for vf in vf_list:
+                                VideoFrameDao.delete_video_frame(vf)
+                            
+                        MediaFileDao.delete_media_file(mf)
+                            
+                    stats['removed'] += 1
+
+                # 添加新文件
+                total_files = len(files_to_add)
+                for i, file_path in enumerate(files_to_add, 1):
+                    if self.indexer.index_single_file(file_path):
+                        stats['added'] += 1
+                    self.progress.emit(folder, i, total_files)
+
+            self.finished.emit(stats)
         except Exception as e:
             self.error.emit(str(e))
 
@@ -208,7 +207,7 @@ class MainWindow(QMainWindow):
             self.setup_ui()
             
             # 从数据库加载已索引的文件夹
-            # self.load_indexed_folders()
+            self.load_indexed_folders()
             
             # 自动重建索引
             self.rebuild_search_index()
@@ -216,7 +215,7 @@ class MainWindow(QMainWindow):
             # 初始化进度对话框
             self.progress_dialog = None
         except Exception as e:
-            logging.error("Error in MainWindow initialization: ", e)
+            log.error("Error in MainWindow initialization: ", e)
             QMessageBox.critical(
                 self,
                 "初始化错误",
@@ -304,15 +303,24 @@ class MainWindow(QMainWindow):
     def show_indexed_folders(self):
         """显示当前索引的文件夹"""
         if not self.indexed_folders:
-            QMessageBox.information(self, "提示", "没有已索引的文件夹")
-            return
-            
-        folders = "\n".join(self.indexed_folders)
-        QMessageBox.information(
-            self,
-            "已索引文件夹",
-            f"当前已索引的文件夹：\n\n{folders}"
-        )
+            # QMessageBox.information(self, "提示", "没有已索引的文件夹")
+            # 从数据库加载已索引的文件夹
+            self.load_indexed_folders()
+            # return
+        # 以列表形式显示已索引的文件夹
+
+        file_path_count = FilePathDao.file_path_count()
+
+        self._show_status_bar_message(f"当前已索引的文件夹数量：{file_path_count}", 5000)
+
+
+
+        # folders = "\n".join(self.indexed_folders)
+        # QMessageBox.information(
+        #     self,
+        #     "已索引文件夹",
+        #     f"当前已索引的文件夹：\n\n{folders}"
+        # )
 
     def create_results_area(self):
         """创建优化的结果显示区域"""
@@ -346,18 +354,15 @@ class MainWindow(QMainWindow):
 
     def load_indexed_folders(self):
         """从数据库加载已索引的文件夹"""
-        session = SQLiteDB().get_session()
-        try:
-            # 获取所有已索引文件的目录
-            folders = session.query(MediaFile.file_path).distinct().all()
-            for (file_path,) in folders:
-                folder = os.path.dirname(file_path)
-                self.indexed_folders.add(folder)
-            
-            # 如果有已索引的文件夹，启用刷新按钮
-            self.refresh_btn.setEnabled(len(self.indexed_folders) > 0)
-        finally:
-            session.close()
+        # 获取所有已索引文件的目录
+        folders = FilePathDao.get_indexed_folders()
+
+        for file_path in folders:
+            folder = os.path.dirname(file_path)
+            self.indexed_folders.add(folder)
+        
+        # 如果有已索引的文件夹，启用刷新按钮
+        self.refresh_btn.setEnabled(len(self.indexed_folders) > 0)
 
     def refresh_indexes(self):
         """刷新所有已索引文件夹"""
@@ -425,7 +430,7 @@ class MainWindow(QMainWindow):
     def rebuild_search_index(self):
         """重建搜索索引"""
         try:
-            logging.error("=== Rebuilding search index on startup ===")
+            log.info("=== 启动时重建搜索索引 ===")
             # 显示加载对话框
             self.loading_dialog = QProgressDialog(
                 "正在加载搜索索引...", 
@@ -450,7 +455,7 @@ class MainWindow(QMainWindow):
             self._show_status_bar_message(f"搜索索引加载完成")
             
         except Exception as e:
-            logging.error(f"Error rebuilding search index: {str(e)}")
+            log.error(f"Error rebuilding search index: {str(e)}")
             traceback.print_exc()
             QMessageBox.warning(self, "错误", "搜索索引重建失败，请重新运行程序")
             
@@ -672,19 +677,14 @@ class MainWindow(QMainWindow):
         end_index = min((start_index + self.items_per_page), length)
         results_to_display = self.all_results[start_index:end_index]
         
-        session = SQLiteDB().get_session()
-        try:
-            for _index, item in enumerate(results_to_display):
-                score = item['score']
-                metadata = item['metadata']
-                print(f'metadata type is {type(metadata)}, metadata={metadata}')
-                media_file = session.query(MediaFile).get(metadata['id'])
-                if media_file and os.path.exists(media_file.file_path):
-                    # 创建结果卡片
-                    result_card = self.create_result_card(media_file, score, metadata)
-                    self.results_layout.addWidget(result_card)
-        finally:
-            session.close()
+        for _index, item in enumerate(results_to_display):
+            score = item['score']
+            metadata = item['metadata']
+            media_file = MediaFileDao.get_media_files_by_id(metadata['id'])
+            if media_file and os.path.exists(media_file.file_path):
+                # 创建结果卡片
+                result_card = self.create_result_card(media_file, score, metadata)
+                self.results_layout.addWidget(result_card)
         
         self.current_page += 1
 
@@ -791,7 +791,7 @@ class MainWindow(QMainWindow):
         return card
     
     def _open_folder(self, path):
-        logging.info(f"Opening folder for: {path}")
+        log.info(f"Opening folder for: {path}")
         if CURRENT_OS == 'linux':
             os.system(f'xdg-open "{os.path.dirname(path)}"')
         elif CURRENT_OS == 'windows':
@@ -803,7 +803,7 @@ class MainWindow(QMainWindow):
     
     def play_video_at_timestamp(self, video_path: str, timestamp: float):
         """使用默认播放器播放视频，并尝试跳转到指定时间"""
-        logging.info(f"Playing video: {video_path}, timestamp: {timestamp}")
+        log.info(f"Playing video: {video_path}, timestamp: {timestamp}")
         command = []
 
         if CURRENT_OS == 'windows':
@@ -821,9 +821,9 @@ class MainWindow(QMainWindow):
         try:
             subprocess.run(command, check=True)
         except subprocess.CalledProcessError as e:
-            logging.error(f"Error executing command: {e}")
+            log.error(f"Error executing command: {e}")
         except FileNotFoundError as e:
-            logging.error("Command not found: ", e)
+            log.error("Command not found: ", e)
 
         # 这里使用 ffplay 播放器（需要安装 ffmpeg）
         # os.system(f'ffplay "{video_path}" -ss {timestamp}')

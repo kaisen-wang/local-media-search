@@ -1,11 +1,7 @@
-import json
 import logging
 import chromadb
-import numpy as np
-from chromadb.api.types import QueryResult
-from typing import List, Optional
+from typing import List
 from src.config import VECTOR_DB_PATH
-from .models import MediaFile, VideoFrame
 
 logger = logging.getLogger(__name__)
 
@@ -14,7 +10,7 @@ class VectorDB:
 
     def __new__(cls):
         if cls._instance is None:
-            logger.info("Creating new instance of VectorDB")
+            logger.info("创建 VectorDB 实例")
             cls._instance = super(VectorDB, cls).__new__(cls)
             cls._instance._init_db()
         return cls._instance
@@ -22,33 +18,31 @@ class VectorDB:
     def _init_db(self) -> None:
         """初始化向量数据库"""
         self.client = chromadb.PersistentClient(path = VECTOR_DB_PATH)
-        self.collection = self.client.get_or_create_collection('media_search')
+        self.collection = self.client.get_or_create_collection(name='media_search', metadata={"hnsw:space": "cosine"})
 
-    def add_feature_vector_media_file(self, media_file: MediaFile) -> None:
+    def add_feature_vector_media_file(self, id: int, file_path: str, file_type: str, feature_list: List[float]) -> None:
         """向集合中添加多个特征向量"""
-        features = np.array(json.loads(media_file.feature_vector))
         self._add_feature_vector(
-            str(media_file.id),
-            features,
+            str(id),
+            feature_list,
             {
-                'id': media_file.id,
-                'file_path': media_file.file_path,
-                'file_type': media_file.file_type
+                'id': id,
+                'file_path': file_path,
+                'file_type': file_type
             }
         )
     
-    def add_feature_vector_video_frame(self, video_frame: VideoFrame) -> None:
+    def add_feature_vector_video_frame(self, id: int, media_file_id: int, frame_path: str, timestamp: float, feature_list: List[float]) -> None:
         """向集合中添加多个特征向量"""
-        features = np.array(json.loads(video_frame.feature_vector))
         self._add_feature_vector(
-            video_frame.media_file_id + '-' + video_frame.id,
-            features,
+            str(media_file_id) + '-' + str(id),
+            feature_list,
             {
-                'id': video_frame.media_file_id,
-                'video_frame_id': video_frame.id,
-                'file_path': video_frame.frame_path,
+                'id': media_file_id,
+                'video_frame_id': id,
+                'file_path': frame_path,
                 'file_type': 'video_frame',
-                'timestamp': video_frame.timestamp
+                'timestamp': timestamp
             }
         )
 
@@ -61,7 +55,10 @@ class VectorDB:
                 embeddings=[embedding],
                 metadatas=[metadata]
             )
-            # PersistentClient automatically persists changes
+
+    def delete_feature_vector_by_ids(self, ids: List[str]) -> None:
+        """删除集合中的特征向量"""
+        self.collection.delete(ids=ids)
 
     def query(self, query_embeddings: List[float], page_size: int = 20, page_number: int = 1, n_results: int = 200) -> List[dict]:
         """
