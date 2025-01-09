@@ -16,7 +16,8 @@ class Indexer:
     def __init__(self):
         self.file_scanner = FileScanner()
         self.feature_extractor = FeatureExtractor()
-        self.frame_interval = 1  # 每秒提取的帧数
+        # 每秒提取的帧数 1:每秒获取一帧、0.5:每2秒获取一帧
+        self.frame_interval = 0.5
 
     def index_directory(self, directory: str) -> List[str]:
         """索引目录中的所有媒体文件"""
@@ -86,7 +87,7 @@ class Indexer:
                 return True
                 
             else:
-                log.info(f"Failed to extract features from image: {file_path}")
+                log.warning(f"Failed to extract features from image: {file_path}")
                 return False
                 
         except Exception as e:
@@ -97,10 +98,10 @@ class Indexer:
     def _index_video(self, file_path: str) -> bool:
         """索引视频文件"""
         try:
-            log.info(f"=== Indexing video: {file_path} ===")
+            log.info(f"=== 索引视频文件路径: {file_path} ===")
             cap = cv2.VideoCapture(file_path)
             if not cap.isOpened():
-                log.info(f"Could not open video file: {file_path}")
+                log.warning(f"无法打开视频文件: {file_path}")
                 return False
 
             # 获取视频信息
@@ -108,8 +109,10 @@ class Indexer:
             total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
             frame_interval = int(fps / self.frame_interval)  # 每隔多少帧提取一帧
             
+            log.info(f"视频帧率 fps: {fps}; total_frames: {total_frames}; frame_interval: {frame_interval}")
+            
             if fps <= 0 or total_frames <= 0:
-                log.info(f"Invalid video metadata: fps={fps}, total_frames={total_frames}")
+                log.warning(f"视频元数据无效: fps={fps}, total_frames={total_frames}")
                 return False
 
             # 创建视频文件记录
@@ -161,6 +164,7 @@ class Indexer:
                                     media_file_id=media_file.id,
                                     frame_number=frame_count,
                                     timestamp=frame_count / fps,
+                                    file_path=file_path,
                                     frame_path=frame_path,
                                     feature_list=features.tolist()
                                 )

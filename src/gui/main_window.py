@@ -24,7 +24,6 @@ class IndexingWorker(QThread):
         super().__init__()
         self.indexer = indexer
         self.folder = folder
-
     def run(self):
         try:
             # 添加索引路径
@@ -39,7 +38,7 @@ class IndexingWorker(QThread):
             self.progress.emit(0, total_files)
 
             # 使用线程池并行处理文件
-            with concurrent.futures.ThreadPoolExecutor() as executor:
+            with concurrent.futures.ThreadPoolExecutor(thread_name_prefix='IndexingWorker') as executor:
                 futures = {executor.submit(self.indexer.index_single_file, file_path): file_path for file_path in media_files}
                 for i, future in enumerate(concurrent.futures.as_completed(futures), 1):
                     file_path = futures[future]
@@ -313,14 +312,12 @@ class MainWindow(QMainWindow):
 
         self._show_status_bar_message(f"当前已索引的文件夹数量：{file_path_count}", 5000)
 
-
-
-        # folders = "\n".join(self.indexed_folders)
-        # QMessageBox.information(
-        #     self,
-        #     "已索引文件夹",
-        #     f"当前已索引的文件夹：\n\n{folders}"
-        # )
+        folders = "\n".join(self.indexed_folders)
+        QMessageBox.information(
+            self,
+            "已索引文件夹",
+            f"当前已索引的文件夹：\n\n{folders}"
+        )
 
     def create_results_area(self):
         """创建优化的结果显示区域"""
@@ -452,7 +449,7 @@ class MainWindow(QMainWindow):
             self.loading_dialog.close()
             
             # 更新状态栏
-            self._show_status_bar_message(f"搜索索引加载完成")
+            self._show_status_bar_message(f"搜索索引加载完成", 1000)
             
         except Exception as e:
             log.error(f"Error rebuilding search index: {str(e)}")
@@ -493,7 +490,8 @@ class MainWindow(QMainWindow):
             )
             self.progress_dialog.setWindowModality(Qt.WindowModality.WindowModal)
             self.progress_dialog.setAutoClose(True)
-            self.progress_dialog.setAutoReset(True)
+            # self.progress_dialog.setAutoReset(True)
+            self.progress_dialog.setCancelButton(None)  # 禁用取消按钮
             
             # 创建索引线程
             self.index_worker = IndexingWorker(self.indexer, folder)
@@ -501,6 +499,7 @@ class MainWindow(QMainWindow):
             self.index_worker.finished.connect(self.indexing_finished)
             self.index_worker.error.connect(self.indexing_error)
             
+            self.progress_dialog.canceled.connect(self.indexing_stop)
             self.progress_dialog.show()
             self.index_worker.start()
 
@@ -534,6 +533,9 @@ class MainWindow(QMainWindow):
             "错误",
             f"索引过程中发生错误：{error_msg}"
         )
+
+    def indexing_stop(self):
+        self.index_worker.terminate()
 
     def perform_text_search(self):
         """执行文本搜索"""
@@ -585,7 +587,6 @@ class MainWindow(QMainWindow):
         if not file_name:
             QMessageBox.warning(self, "提示", "请选择要搜索的图片")
             return
-        
 
         try:
             # 显示加载对话框
@@ -714,7 +715,7 @@ class MainWindow(QMainWindow):
         if result_type == 'image':
             thumbnail_path = media_file.file_path
         else:
-            thumbnail_path = metadata['file_path']
+            thumbnail_path = metadata['frame_path']
             
         thumbnail = ImageLabel(thumbnail_path) # QLabel()
         thumbnail.setAlignment(Qt.AlignmentFlag.AlignCenter)  # 设置标签居中对齐

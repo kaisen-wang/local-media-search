@@ -1,18 +1,21 @@
 import os
 import logging
+from sqlalchemy import event
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.exc import OperationalError
 from src.config import DB_PATH
 from .base import Base
+from time import sleep
 
-logger = logging.getLogger(__name__)
+log = logging.getLogger(__name__)
 
 class SQLiteDB:
     _instance = None
 
     def __new__(cls):
         if not cls._instance:
-            logger.info("创建 SQLiteDB 实例")
+            log.info("创建 SQLiteDB 实例")
             cls._instance = super(SQLiteDB, cls).__new__(cls)
             cls._instance._init_db()
         return cls._instance
@@ -40,7 +43,6 @@ class SQLiteDB:
                 dbapi_conn.execute('PRAGMA synchronous=NORMAL')
                 dbapi_conn.execute('PRAGMA busy_timeout=30000')  # 30 秒超时
                 
-            from sqlalchemy import event
             event.listen(self.engine, 'connect', _enable_wal)
             
             self.Session = sessionmaker(
@@ -57,13 +59,13 @@ class SQLiteDB:
                     with open(self.db_path, 'a'):
                         pass
                 except PermissionError:
-                    logging.error(f"No write permission for {self.db_path}, attempting to remove...")
+                    log.error(f"No write permission for {self.db_path}, attempting to remove...")
                     os.remove(self.db_path)
-                    logging.error(f"Removed old database at {self.db_path}")
+                    log.error(f"Removed old database at {self.db_path}")
             
             # 创建新的数据库和表
             Base.metadata.create_all(self.engine)
-            logging.info(f"Created new database at {self.db_path}")
+            log.info(f"Created new database at {self.db_path}")
             
             # 设置数据库文件权限为 600 (只有用户可以读写)
             os.chmod(self.db_path, 0o600)
@@ -73,20 +75,18 @@ class SQLiteDB:
             try:
                 session.execute(text("SELECT 1"))
                 session.commit()
-                logging.info("数据库连接测试成功")
+                log.info("数据库连接测试成功")
             finally:
                 session.close()
             
         except Exception as e:
-            logging.error(f"Error initializing database: {str(e)}")
+            log.error(f"Error initializing database: {str(e)}")
             raise
 
     def get_session(self):
         """获取新的数据库会话"""
         session = self.Session()
         # 为数据库锁添加重试逻辑
-        from sqlalchemy.exc import OperationalError
-        from time import sleep
         
         max_retries = 3
         retry_delay = 1  # 秒
@@ -98,7 +98,7 @@ class SQLiteDB:
                 return session
             except OperationalError as e:
                 if "database is locked" in str(e) and attempt < max_retries - 1:
-                    logger.warning(f"Database locked, retrying in {retry_delay} seconds...")
+                    log.warning(f"Database locked, retrying in {retry_delay} seconds...")
                     sleep(retry_delay)
                     retry_delay *= 2  # 指数回退
                     continue

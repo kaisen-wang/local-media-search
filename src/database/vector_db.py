@@ -3,14 +3,14 @@ import chromadb
 from typing import List
 from src.config import VECTOR_DB_PATH
 
-logger = logging.getLogger(__name__)
+log = logging.getLogger(__name__)
 
 class VectorDB:
     _instance = None
 
     def __new__(cls):
         if cls._instance is None:
-            logger.info("创建 VectorDB 实例")
+            log.info("创建 VectorDB 实例")
             cls._instance = super(VectorDB, cls).__new__(cls)
             cls._instance._init_db()
         return cls._instance
@@ -18,6 +18,10 @@ class VectorDB:
     def _init_db(self) -> None:
         """初始化向量数据库"""
         self.client = chromadb.PersistentClient(path = VECTOR_DB_PATH)
+        # 支持的 hnsw:space 选项包括：
+        # "cosine"：余弦相似度（默认）
+        # "l2"：欧几里得距离
+        # "ip"：内积（Inner Product）
         self.collection = self.client.get_or_create_collection(name='media_search', metadata={"hnsw:space": "cosine"})
 
     def add_feature_vector_media_file(self, id: int, file_path: str, file_type: str, feature_list: List[float]) -> None:
@@ -32,7 +36,7 @@ class VectorDB:
             }
         )
     
-    def add_feature_vector_video_frame(self, id: int, media_file_id: int, frame_path: str, timestamp: float, feature_list: List[float]) -> None:
+    def add_feature_vector_video_frame(self, id: int, media_file_id: int, frame_path: str, file_path: str, timestamp: float, feature_list: List[float]) -> None:
         """向集合中添加多个特征向量"""
         self._add_feature_vector(
             str(media_file_id) + '-' + str(id),
@@ -40,8 +44,9 @@ class VectorDB:
             {
                 'id': media_file_id,
                 'video_frame_id': id,
-                'file_path': frame_path,
+                'file_path': file_path,
                 'file_type': 'video_frame',
+                'frame_path': frame_path,
                 'timestamp': timestamp
             }
         )
@@ -85,9 +90,9 @@ class VectorDB:
             distance = result['distances'][0][i]
             metadata = result['metadatas'][0][i]
             # 将距离转换为相似度得分 确保相似度得分在合理范围内
-            score = distance
+            score = (distance + 1) / 2
  
-            logger.info(f"相似度得分 Distance: {distance}")
+            log.info(f"相似度得分 Score: {score}; Distance: {distance};")
 
             formatted_results.append({
                 'id': result['ids'][0][i],

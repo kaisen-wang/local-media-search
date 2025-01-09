@@ -25,7 +25,8 @@ class MediaFile(Base):
     id = Column(Integer, primary_key=True)
     file_path = Column(String, unique=True, nullable=False)
     file_type = Column(String, nullable=False)  # 'image' or 'video'
-    feature_vector = Column(String)  # 存储特征向量的序列化字符串
+    # feature_vector = Column(String)  # 存储特征向量的序列化字符串
+    file_metadata = Column(String)
     created_at = Column(DateTime, default=datetime.utcnow)
     last_modified = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     frames = relationship("VideoFrame", back_populates="media_file")
@@ -39,7 +40,7 @@ class VideoFrame(Base):
     frame_number = Column(Integer)  # 帧号
     timestamp = Column(Float)       # 时间戳（秒）
     frame_path = Column(String)     # 帧图像保存路径
-    feature_vector = Column(String) # 特征向量
+    # feature_vector = Column(String) # 特征向量
     
     media_file = relationship("MediaFile", back_populates="frames")
 
@@ -113,16 +114,15 @@ class MediaFileDao:
         """添加媒体文件"""
         session = SQLiteDB().get_session()
         try:
-            feature_vector = None
-
-            if feature_list is not None:
-                feature_vector = json.dumps(feature_list)
+            # feature_vector = None
+            # if feature_list is not None:
+            #     feature_vector = json.dumps(feature_list)
 
             media_file = MediaFile(
                 file_path=file_path,
                 file_type=file_type,
-                feature_vector=feature_vector,
-                metadata=json.dumps(metadata) if metadata else None
+                # feature_vector=feature_vector,
+                file_metadata=json.dumps(metadata) if metadata else None
             )
 
             session.add(media_file)
@@ -185,28 +185,34 @@ class MediaFileDao:
 
 class VideoFrameDao:
 
-    def add_video_frame(media_file_id: int, frame_number: int, timestamp: float, frame_path: str, feature_list: List[float] = None) -> VideoFrame:
+    def add_video_frame(media_file_id: int, frame_number: int, timestamp: float, frame_path: str, file_path: str, feature_list: List[float] = None) -> VideoFrame:
         """添加视频帧"""
         session = SQLiteDB().get_session()
         try:
-            feature_vector = None
-
-            if feature_list is not None:
-                feature_vector = json.dumps(feature_list)
+            # feature_vector = None
+            # if feature_list is not None:
+            #     feature_vector = json.dumps(feature_list)
 
             video_frame = VideoFrame(
                 media_file_id=media_file_id,
                 frame_number=frame_number,
                 timestamp=timestamp,
                 frame_path=frame_path,
-                feature_vector=feature_vector
+                # feature_vector=feature_vector
             )
 
             session.add(video_frame)
             session.flush()
 
             if feature_list is not None:
-                VectorDB().add_feature_vector_video_frame(video_frame.id, video_frame.media_file_id, video_frame.frame_path, video_frame.timestamp, feature_list)
+                VectorDB().add_feature_vector_video_frame(
+                    video_frame.id,
+                    media_file_id,
+                    frame_path,
+                    file_path,
+                    timestamp,
+                    feature_list
+                )
             
             return video_frame
         except Exception as e:

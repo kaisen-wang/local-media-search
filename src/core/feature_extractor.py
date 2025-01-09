@@ -5,7 +5,6 @@ from transformers import ChineseCLIPProcessor, ChineseCLIPModel
 import cv2
 import torch
 import numpy as np
-import traceback
 import logging
 
 log = logging.getLogger(__name__)
@@ -13,11 +12,8 @@ log = logging.getLogger(__name__)
 class FeatureExtractor:
     def __init__(self):
         try:
-            log.info("=== Starting Feature Extractor Initialization ===")
-            
-            # 初始化文本特征提取模型（ChineseCLIP）
-            log.info(f"Initializing ChineseCLIP for text and image features...")
-            log.info(f"Model: {MODEL_NAME}")
+            log.info("正在初始化文本特征提取模型 ChineseCLIP...")
+            log.info(f"模型: {MODEL_NAME}")
             log.info(f"Device: {DEVICE}")
             
             self.processor = ChineseCLIPProcessor.from_pretrained(
@@ -36,13 +32,12 @@ class FeatureExtractor:
             ).to(DEVICE)
             
             self.model.eval()
-            log.info("=== Initialization Complete ===")
+            log.info("初始化完成")
             
         except Exception as e:
-            log.error("=== Initialization Error ===")
+            log.error("=== 模型初始化失败 ===")
             log.error(f"Error type: {type(e).__name__}")
-            log.error(f"Error message: {str(e)}")
-            traceback.print_exc()
+            log.error("Error message: ", e)
             log.error("===========================")
             raise
 
@@ -70,8 +65,7 @@ class FeatureExtractor:
         except Exception as e:
             log.error(f"=== Image Processing Error ===")
             log.error(f"Error type: {type(e).__name__}")
-            log.error(f"Error message: {str(e)}")
-            traceback.print_exc()
+            log.error("Error message: ", e)
             log.error("============================")
             return None
 
@@ -103,10 +97,9 @@ class FeatureExtractor:
             
         except Exception as e:
             log.error("=== Text Processing Error ===")
-            log.error(f"Error type: {type(e).__name__}")
-            log.error(f"Error message: {str(e)}")
             log.error(f"Input text: {text}")
-            traceback.print_exc()
+            log.error(f"Error type: {type(e).__name__}")
+            log.error("Error message: ", e)
             log.error("===========================")
             return None
 
@@ -137,8 +130,7 @@ class FeatureExtractor:
         except Exception as e:
             log.error(f"=== Frame Processing Error ===")
             log.error(f"Error type: {type(e).__name__}")
-            log.error(f"Error message: {str(e)}")
-            traceback.print_exc()
+            log.error("Error message: ", e)
             log.error("============================")
             return None
 
@@ -166,8 +158,7 @@ class FeatureExtractor:
         except Exception as e:
             log.error("=== Similarity Computation Error ===")
             log.error(f"Error type: {type(e).__name__}")
-            log.error(f"Error message: {str(e)}")
-            traceback.print_exc()
+            log.error("Error message: ", e)
             log.error("==================================")
             return 0.0
 
