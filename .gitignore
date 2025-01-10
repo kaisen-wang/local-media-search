@@ -6,6 +6,7 @@ dist/
 build/
 logs/
 models/
+debian/
 *.spec
 */*/LocalMediaSearch
 */*/__pycache__

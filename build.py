@@ -14,8 +14,25 @@ def install_requirements():
 def build_windows():
     """Windows打包"""
     print("正在构建Windows安装包...")
-    # 使用cx_Freeze构建
-    subprocess.run([sys.executable, "setup.py", "build", "--include-module=http.client"])
+    # 使用pyinstaller构建
+    subprocess.run([
+        sys.executable, "-m", "PyInstaller",
+        "-D",
+        "--windowed",
+        "--clean",
+        "--upx-dir", "upx",
+        "--add-data", "resources;resources",
+        "--exclude-module", "tensorflow",
+        "--exclude-module", "torch",
+        "--exclude-module", "transformers",
+        "--hidden-import", "PIL",
+        "--hidden-import", "PIL.Image",
+        "--hidden-import", "PIL.ImageOps",
+        "--hidden-import", "cv2",
+        "--collect-all", "src",
+        "--collect-all", "models",
+        "main.py"
+    ])
     
     # 使用NSIS创建安装程序
     if os.path.exists("installer.nsi"):
@@ -26,8 +43,25 @@ def build_windows():
 def build_macos():
     """macOS打包"""
     print("正在构建macOS安装包...")
-    # 使用cx_Freeze构建
-    subprocess.run([sys.executable, "setup.py", "build"])
+    # 使用pyinstaller构建
+    subprocess.run([
+        sys.executable, "-m", "PyInstaller",
+        "-D",
+        "--windowed",
+        "--clean",
+        "--upx-dir", "upx",
+        "--add-data", "resources:resources",
+        "--exclude-module", "tensorflow",
+        "--exclude-module", "torch",
+        "--exclude-module", "transformers",
+        "--hidden-import", "PIL",
+        "--hidden-import", "PIL.Image",
+        "--hidden-import", "PIL.ImageOps",
+        "--hidden-import", "cv2",
+        "--collect-all", "src",
+        "--collect-all", "models",
+        "main.py"
+    ])
     
     # 创建DMG
     app_path = "dist/macos/LocalMediaSearch.app"
@@ -46,11 +80,31 @@ def build_linux():
     print("正在构建Linux安装包...")
     
     # 创建必要的目录
+    os.makedirs("dist/linux/LocalMediaSearch", exist_ok=True)
     os.makedirs("debian/LocalMediaSearch/usr/lib/LocalMediaSearch", exist_ok=True)
     os.makedirs("debian/LocalMediaSearch/usr/share/applications", exist_ok=True)
     
-    # 使用cx_Freeze构建
-    subprocess.run([sys.executable, "setup.py", "build"])
+    # 使用pyinstaller构建
+    subprocess.run([
+        sys.executable, "-m", "PyInstaller",
+        "-D",
+        "-w",
+        "--clean",
+        "--upx-dir", "upx",
+        "--add-data", "resources:resources",
+        # "--exclude-module", "tensorflow",
+        # "--exclude-module", "torch",
+        # "--exclude-module", "transformers",
+        "--hidden-import", "PIL",
+        "--hidden-import", "PIL.Image",
+        "--hidden-import", "PIL.ImageOps",
+        "--hidden-import", "cv2",
+        "--collect-all", "src",
+        # "--collect-all", "models",
+        "-n",
+        "LocalMediaSearch",
+        "main.py"
+    ])
     
     # 复制文件到debian目录
     shutil.copytree(
@@ -87,4 +141,4 @@ def main():
         sys.exit(1)
 
 if __name__ == "__main__":
-    main() 
+    main()

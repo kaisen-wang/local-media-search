@@ -9,5 +9,5 @@ torch>=2.2.0
 torchvision>=0.15.1
 transformers>=4.27.0
 tensorflow>=2.8.0
-cx-Freeze>=6.10.0
+pyinstaller>=6.0.0
 configparser>=7.1.0

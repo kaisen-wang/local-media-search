@@ -50,10 +50,9 @@ LocalMediaSearch 是一个跨平台（Windows、macOS、Linux）的本地媒体�
    python main.py
 
    # 打包程序
-   pip install pyinstaller
-   pyinstaller -D -w -i resources/logo.ico -n LocalMediaSearch main.py
-   or
    python build.py
+   
+   # 安装UPX压缩工具
    ```
 
 ## 使用指南
