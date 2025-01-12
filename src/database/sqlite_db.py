@@ -27,7 +27,7 @@ class SQLiteDB:
             # 使用连接池和超时配置引擎
             self.engine = create_engine(
                 f'sqlite:///{DB_PATH}',
-                echo=True,
+                echo=False,
                 pool_size=10,
                 max_overflow=20,
                 pool_timeout=30,

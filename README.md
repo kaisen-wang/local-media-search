@@ -12,20 +12,12 @@ LocalMediaSearch 是一个跨平台（Windows、macOS、Linux）的本地媒体�
 2. 搜索功能
    - 文本搜索：通过关键词搜索图片和视频内容
    - 图片搜索：上传图片搜索相似内容
-   - 组合搜索：支持文本+图片混合搜索
    
-3. 智能识别
-   - 图片场景识别
-   - 物体检测
-   - 文字识别（OCR）
-   - 人脸检测
-
 ## 技术方案
-- 使用 Python + Qt 开发跨平台桌面应用
-- 后端采用 FastAPI 提供 RESTful API
-- 使用 CLIP 模型进行图文特征提取
-- 使用 Faiss 进行向量检索
-- SQLite 存储文件索引和元数据
+- 使用 PyQt6 开发跨平台桌面应用
+- 使用 ChineseCLIP 模型进行图文特征提取
+- 使用 Chroma 进行向量检索
+- SQLite3 存储文件索引和元数据
 
 ## 安装说明
 1. 环境要求
@@ -57,7 +49,7 @@ LocalMediaSearch 是一个跨平台（Windows、macOS、Linux）的本地媒体�
 
 ## 使用指南
 1. 首次运行
-   - 点击"设置"配置需要索引的文件夹
+   - 点击"添加索引文件夹"配置需要索引的文件夹
    - 等待系统完成初始索引
    
 2. 搜索操作
@@ -70,15 +62,6 @@ LocalMediaSearch 是一个跨平台（Windows、macOS、Linux）的本地媒体�
 - [X] v1.1: 添加视频帧提取和检索
 - [X] v1.2: 优化搜索算法和用户界面
 - [ ] v2.0: 添加更多高级特性
-
-## CI/CD Pipeline
-项目使用GitHub Actions进行持续集成和部署：
-- 自动运行测试（Windows/macOS/Linux）
-- 自动构建可执行文件
-- 自动发布版本
-- 自动部署文档
-
-详细配置请查看 `pipeline.yml` 文件。
 
 ## 贡献指南
 欢迎提交 Issue 和 Pull Request 来帮助改进项目。
@@ -120,25 +103,3 @@ mkdir -p ./models
 1. 模型文件是否已正确下载
 2. 文件路径是否正确
 3. 文件名是否与配置匹配
-
-
-# 安装说明
-
-## Windows
-1. 下载 LocalMediaSearch-Setup.exe
-2. 双击运行安装程序
-3. 按照向导完成安装
-
-## macOS
-1. 下载 LocalMediaSearch.dmg
-2. 双击打开DMG文件
-3. 将应用程序拖入Applications文件夹
-
-## Debian/Ubuntu
-1. 下载 localmediasearch_1.0.0_amd64.deb
-2. 双击使用软件中心安装
-   或使用命令行：
-   ```bash
-   sudo dpkg -i localmediasearch_1.0.0_amd64.deb
-   sudo apt-get install -f  # 安装依赖
-   ```
