@@ -7,7 +7,7 @@ from logging.handlers import RotatingFileHandler
 
 # 读取 config.ini 文件
 config = configparser.ConfigParser()
-config.read('config.ini')
+config.read('config.ini', encoding='utf-8')
 
 def get_path(path_str: str) -> str:
     """展开路径中的波浪号和环境变量"""

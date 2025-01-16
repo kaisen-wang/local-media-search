@@ -2,6 +2,7 @@ from typing import List
 from datetime import datetime
 from .sqlite_db import SQLiteDB
 from .vector_db import VectorDB
+from src.utils import generate_id
 import json
 import logging
 
@@ -85,6 +86,7 @@ class FilePathDao:
         try:
             cursor.execute(FilePath.create_table_sql())
             conn.commit()
+            log.info("Created file_paths table")
         except Exception as e:
             conn.rollback()
             log.error("Error creating file_paths table: ", e)
@@ -150,6 +152,7 @@ class MediaFileDao:
         try:
             cursor.execute(MediaFile.create_table_sql())
             conn.commit()
+            log.info("Created media_files table")
         except Exception as e:
             conn.rollback()
             log.error("Error creating media_files table: ", e)
@@ -165,12 +168,10 @@ class MediaFileDao:
         cursor = conn.cursor()
         try:
             cursor.execute("SELECT COUNT(*) FROM media_files WHERE file_path = ?", (file_path,))
-            value = cursor.fetchone()
-            if value is None:
-                return False
-            return value[0] > 0
+            count = cursor.fetchone()[0]
+            return count > 0
         except Exception as e:
-            log.error("Error checking if file is indexed: ", e)
+            log.error("Error checking if file is indexed: %s", str(e))
         finally:
             cursor.close()
         return False
@@ -180,7 +181,7 @@ class MediaFileDao:
         conn = SQLiteDB().get_connection()
         cursor = conn.cursor()
         try:
-            cursor.execute("SELECT COUNT(*) FROM media_files")
+            cursor.execute("SELECT COUNT(*) as count_1 FROM media_files")
             value = cursor.fetchone()
             if value is None:
                 return True
@@ -198,18 +199,18 @@ class MediaFileDao:
         try:
             file_metadata = json.dumps(metadata) if metadata else None
             now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            id = generate_id()
             cursor.execute(
-                "INSERT INTO media_files (file_path, file_type, file_metadata, created_at, last_modified) VALUES (?, ?, ?, ?, ?)",
-                (file_path, file_type, file_metadata, now, now)
+                "INSERT INTO media_files (id, file_path, file_type, file_metadata, created_at, last_modified) VALUES (?, ?, ?, ?, ?, ?)",
+                (id, file_path, file_type, file_metadata, now, now)
             )
-            media_file_id = cursor.lastrowid
             conn.commit()
 
             if feature_list is not None:
-                VectorDB().add_feature_vector_media_file(media_file_id, file_path, file_type, feature_list)
+                VectorDB().add_feature_vector_media_file(id, file_path, file_type, feature_list)
 
             return MediaFile(
-                id=media_file_id,
+                id=id,
                 file_path=file_path,
                 file_type=file_type,
                 file_metadata=file_metadata
@@ -289,6 +290,7 @@ class VideoFrameDao:
         try:
             cursor.execute(VideoFrame.create_table_sql())
             conn.commit()
+            log.info("video_frames table created")
         except Exception as e:
             conn.rollback()
             log.error("Error creating video_frames table: ", e)
@@ -300,23 +302,23 @@ class VideoFrameDao:
         conn = SQLiteDB().get_connection()
         cursor = conn.cursor()
         try:
+            id = generate_id()
             cursor.execute(
-                "INSERT INTO video_frames (media_file_id, frame_number, timestamp, frame_path) VALUES (?, ?, ?, ?)",
-                (media_file_id, frame_number, timestamp, frame_path)
+                "INSERT INTO video_frames (id, media_file_id, frame_number, timestamp, frame_path) VALUES (?, ?, ?, ?, ?)",
+                (id, media_file_id, frame_number, timestamp, frame_path)
             )
-            video_frame_id = cursor.lastrowid
+            conn.commit()
             if feature_list is not None:
                 VectorDB().add_feature_vector_video_frame(
-                    video_frame_id,
+                    id,
                     media_file_id,
                     frame_path,
                     file_path,
                     timestamp,
                     feature_list
                 )
-            conn.commit()
             return VideoFrame(
-                id=video_frame_id,
+                id=id,
                 media_file_id=media_file_id,
                 frame_number=frame_number,
                 timestamp=timestamp,
@@ -324,7 +326,8 @@ class VideoFrameDao:
             )
         except Exception as e:
             conn.rollback()
-            raise Exception(f"Error adding video frame: {str(e)}")
+            log.error("Error adding video frame: ", e)
+            raise Exception(f"Error adding video frame:", e)
         finally:
             cursor.close()
 

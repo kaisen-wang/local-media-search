@@ -50,7 +50,7 @@ class SQLiteDB:
             log.info("数据库连接测试成功")
             
         except Exception as e:
-            log.error(f"Error initializing database: {str(e)}")
+            log.error(f"Error initializing database:", e)
             raise
 
     def get_connection(self):

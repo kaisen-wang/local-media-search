@@ -1,10 +1,10 @@
 import os
 import time
 import random
+from src.config import MODEL_NAME
 
 def check_model_files():
     """检查模型文件是否存在并完整"""
-    MODEL_NAME = ''
     required_files = ['config.json', 'pytorch_model.bin', 'clip_cn_vit-b-16.pt']
     
     if not os.path.exists(MODEL_NAME):
@@ -45,7 +45,7 @@ def delete_folder(folder_path: str):
                 delete_folder(file_path)
 
 def generate_id() -> int:
-    """雪花算法生成数据库ID"""
+    """雪花算法生成ID"""
     # 获取当前时间戳（毫秒级）
     timestamp = int(time.time() * 1000)
     # 生成一个随机数

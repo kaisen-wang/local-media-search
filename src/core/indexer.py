@@ -184,7 +184,7 @@ class Indexer:
                     log.warning(f"No frames were successfully processed for {file_path}")
                     return False
 
-                log.info(f"成功索引视频 {file_path} 共 {successful_frames} 帧")
+                log.info(f"成功索引视频 {file_path} 共获取 {successful_frames} 帧")
                 return True
 
             except Exception as e:

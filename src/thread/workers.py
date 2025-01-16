@@ -39,7 +39,7 @@ class IndexingWorker(QThread):
                         if future.result():
                             indexed_files.append(file_path)
                     except Exception as e:
-                        log.error(f"Error indexing file {file_path}: {str(e)}")
+                        log.error(f"Error indexing file {file_path}:", e)
 
                     # 发送进度信号
                     self.progress.emit(i, total_files)

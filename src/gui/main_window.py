@@ -19,12 +19,10 @@ class MainWindow(QMainWindow):
         super(MainWindow, self).__init__(parent)
         
         try:
-            self.setMinimumSize(WINDOW_MIN_WIDTH, WINDOW_MIN_HEIGHT)
-            # self.resize(WINDOW_MIN_WIDTH, WINDOW_MIN_HEIGHT)
+            # self.setMinimumSize(WINDOW_MIN_WIDTH, WINDOW_MIN_HEIGHT)
+            self.resize(WINDOW_MIN_WIDTH, WINDOW_MIN_HEIGHT)
             self.setWindowTitle(WINDOW_TITLE)
             self.setCenter()
-            # 禁用最大化按钮
-            self.setWindowFlags(self.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
             
             # 初始化核心组件
             self.indexer = Indexer()
@@ -335,7 +333,7 @@ class MainWindow(QMainWindow):
             )
             self.progress_dialog.setWindowModality(Qt.WindowModality.WindowModal)
             self.progress_dialog.setAutoClose(True)
-            # self.progress_dialog.setAutoReset(True)
+            self.progress_dialog.setAutoReset(True)
             self.progress_dialog.setCancelButton(None)  # 禁用取消按钮
             
             # 创建索引线程
