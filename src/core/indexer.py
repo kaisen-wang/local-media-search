@@ -1,27 +1,22 @@
 from src.core.file_scanner import FileScanner
 from src.core.feature_extractor import FeatureExtractor
 from src.database.models import MediaFileDao, VideoFrameDao
-from src.config import CACHE_DIR
+from src.config import CACHE_DIR, VIDEO_FRAME_INTERVAL
+from src.utils import delete_folder
 from typing import List
 import numpy as np
 import concurrent.futures
 import cv2
 import os
-import traceback
 import logging
 
 log = logging.getLogger(__name__)
 
 class Indexer:
-    def __init__(self):
-        self.file_scanner = FileScanner()
-        self.feature_extractor = FeatureExtractor()
-        # 每秒提取的帧数 1:每秒获取一帧、0.5:每2秒获取一帧
-        self.frame_interval = 0.5
 
     def index_directory(self, directory: str) -> List[str]:
         """索引目录中的所有媒体文件"""
-        media_files = self.file_scanner.scan_directory(directory)
+        media_files = FileScanner.scan_directory(directory)
         indexed_files = []
 
         # 使用线程池并行处理文件
@@ -33,7 +28,7 @@ class Indexer:
                     if future.result():
                         indexed_files.append(file_path)
                 except Exception as e:
-                    log.error(f"Error indexing file {file_path}: {str(e)}")
+                    log.error(f"Error indexing file {file_path}:", e)
 
         return indexed_files
 
@@ -42,11 +37,11 @@ class Indexer:
         try:
             # 检查文件是否已经索引
             if MediaFileDao.is_file_indexed(file_path):
-                log.info(f"文件:{file_path} 索引已存在")
+                log.warning(f"索引已存在 文件:{file_path}")
                 return True
             
             # 确定文件类型
-            file_type = 'image' if self.file_scanner.is_image(file_path) else 'video'
+            file_type = 'image' if FileScanner.is_image(file_path) else 'video'
             
             if file_type == 'image':
                 return self._index_image(file_path)
@@ -54,7 +49,7 @@ class Indexer:
                 return self._index_video(file_path)
     
         except Exception as e:
-            log.error(f"Error indexing file {file_path}: {str(e)}")
+            log.error(f"Error indexing file {file_path}: ", e)
     
         return False
 
@@ -62,19 +57,19 @@ class Indexer:
         """索引图片文件"""
         try:
             log.info(f"=== 图片索引: {file_path} ===")
-            features = self.feature_extractor.extract_image_features(file_path)
+            features = FeatureExtractor().extract_image_features(file_path)
             
             if features is not None:
                 # 验证特征向量
                 if not isinstance(features, np.ndarray):
-                    log.info(f"Invalid feature type: {type(features)}")
+                    log.warning(f"无效的要素类型: {type(features)}")
                     return False
                     
                 if len(features.shape) != 1:
-                    log.info(f"Invalid feature shape: {features.shape}")
+                    log.warning(f"无效的特征形状: {features.shape}")
                     return False
                 
-                log.info(f"Feature vector shape: {features.shape}")
+                log.info(f"特征向量形状: {features.shape}")
 
                 # 将特征向量转换为列表并保存
                 MediaFileDao.add_media_file(
@@ -83,16 +78,15 @@ class Indexer:
                     feature_list=features.tolist()
                 )
 
-                log.info(f"Successfully indexed image: {file_path}")
+                log.info(f"已成功编制索引的图像: {file_path}")
                 return True
                 
             else:
-                log.warning(f"Failed to extract features from image: {file_path}")
+                log.warning(f"无法从图像中提取特征: {file_path}")
                 return False
                 
         except Exception as e:
-            log.error(f"Error indexing image {file_path}: {str(e)}")
-            traceback.print_exc()
+            log.error(f"Error indexing image {file_path}: ", e)
             return False
 
     def _index_video(self, file_path: str) -> bool:
@@ -107,9 +101,9 @@ class Indexer:
             # 获取视频信息
             fps = cap.get(cv2.CAP_PROP_FPS)
             total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-            frame_interval = int(fps / self.frame_interval)  # 每隔多少帧提取一帧
+            frame_interval = int(fps / float(VIDEO_FRAME_INTERVAL))
             
-            log.info(f"视频帧率 fps: {fps}; total_frames: {total_frames}; frame_interval: {frame_interval}")
+            log.debug(f"视频帧率 fps: {fps}; total_frames: {total_frames}; frame_interval: {frame_interval}")
             
             if fps <= 0 or total_frames <= 0:
                 log.warning(f"视频元数据无效: fps={fps}, total_frames={total_frames}")
@@ -147,16 +141,16 @@ class Indexer:
                             cv2.imwrite(frame_path, frame)
                             
                             # 提取特征
-                            features = self.feature_extractor.extract_frame_features(frame)
+                            features = FeatureExtractor().extract_frame_features(frame)
                             
                             if features is not None:
                                 # 验证特征向量
                                 if not isinstance(features, np.ndarray):
-                                    log.info(f"Invalid feature type for frame {frame_count}")
+                                    log.warning(f"Invalid feature type for frame {frame_count}")
                                     continue
                                     
                                 if len(features.shape) != 1:
-                                    log.info(f"Invalid feature shape for frame {frame_count}: {features.shape}")
+                                    log.warning(f"Invalid feature shape for frame {frame_count}: {features.shape}")
                                     continue
                                 
                                 # 将特征向量转换为列表并保存
@@ -173,7 +167,7 @@ class Indexer:
                                     successful_frames += 1
 
                         except Exception as e:
-                            log.error(f"Error processing frame {frame_count}: {str(e)}")
+                            log.error(f"Error processing frame {frame_count}: ", e)
                             if os.path.exists(frame_path):
                                 os.remove(frame_path)
                             continue
@@ -182,10 +176,8 @@ class Indexer:
 
                 # 如果没有成功处理任何帧，则删除视频记录和帧目录
                 if successful_frames == 0:
-                    if os.path.exists(frames_dir):
-                        import shutil
-                        shutil.rmtree(frames_dir)
-                    log.info(f"No frames were successfully processed for {file_path}")
+                    delete_folder(frames_dir)
+                    log.warning(f"No frames were successfully processed for {file_path}")
                     return False
 
                 log.info(f"Successfully indexed video {file_path} with {successful_frames} frames")
@@ -193,15 +185,13 @@ class Indexer:
 
             except Exception as e:
                 # 清理创建的目录
-                if os.path.exists(frames_dir):
-                    import shutil
-                    shutil.rmtree(frames_dir)
-                log.error(f"Error indexing video {file_path}: {str(e)}")
+                delete_folder(frames_dir)
+                log.error(f"Error indexing video {file_path}: ", e)
                 return False
             
             finally:
                 cap.release()
 
         except Exception as e:
-            log.error(f"Error indexing video {file_path}: {str(e)}")
+            log.error(f"Error indexing video {file_path}: ", e)
             return False

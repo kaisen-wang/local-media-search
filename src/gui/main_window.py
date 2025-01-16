@@ -1,203 +1,34 @@
 from PyQt6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-                           QPushButton, QLineEdit, QLabel, QFileDialog, QScrollArea, QMessageBox, QProgressDialog)
-from PyQt6.QtCore import Qt, QThread, pyqtSignal
-from PyQt6.QtGui import QPixmap, QIcon, QGuiApplication
+                           QPushButton, QLineEdit, QLabel, QFileDialog, QScrollArea, QMessageBox, QProgressDialog,
+                           QDialog, QListWidget, QListWidgetItem)
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QIcon, QGuiApplication
 from src.core.indexer import Indexer
-from src.core.search_engine import SearchEngine
+from src.core.feature_extractor import FeatureExtractor
+from src.config import CURRENT_OS, WINDOW_TITLE, WINDOW_MIN_WIDTH, WINDOW_MIN_HEIGHT, IMAGE_EXTENSIONS
+from src.database.models import FilePathDao, MediaFileDao
+from src.thread.workers import IndexingWorker, RefreshWorker, SearchWorker
+from src.gui.label import ImageLabel
 import os
 import logging
-import subprocess
-from src.database.models import FilePathDao, MediaFileDao, VideoFrameDao
-import concurrent.futures
-from src.config import CURRENT_OS, WINDOW_TITLE, WINDOW_MIN_WIDTH, WINDOW_MIN_HEIGHT
-import traceback
 
 log = logging.getLogger(__name__)
-
-class IndexingWorker(QThread):
-    """后台索引线程"""
-    progress = pyqtSignal(int, int)  # 当前进度，总数
-    finished = pyqtSignal(list)  # 完成信号，返回索引的文件列表
-    error = pyqtSignal(str)  # 错误信号
-
-    def __init__(self, indexer, folder):
-        super().__init__()
-        self.indexer = indexer
-        self.folder = folder
-    def run(self):
-        try:
-            # 添加索引路径
-            FilePathDao.add_file_path(self.folder)
-
-            # 首先扫描所有文件
-            media_files = self.indexer.file_scanner.scan_directory(self.folder)
-            total_files = len(media_files)
-            indexed_files = []
-
-            # 发送进度信号
-            self.progress.emit(0, total_files)
-
-            # 使用线程池并行处理文件
-            with concurrent.futures.ThreadPoolExecutor(thread_name_prefix='IndexingWorker') as executor:
-                futures = {executor.submit(self.indexer.index_single_file, file_path): file_path for file_path in media_files}
-                for i, future in enumerate(concurrent.futures.as_completed(futures), 1):
-                    file_path = futures[future]
-                    try:
-                        if future.result():
-                            indexed_files.append(file_path)
-                    except Exception as e:
-                        log.error(f"Error indexing file {file_path}: {str(e)}")
-
-                    # 发送进度信号
-                    self.progress.emit(i, total_files)
-
-            self.finished.emit(indexed_files)
-
-        except Exception as e:
-            self.error.emit(str(e))
-
-class ImageLabel(QLabel):
-    """可点击的图片标签"""
-    def __init__(self, file_path, parent=None):
-        super().__init__(parent)
-        self.file_path = file_path
-        self.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.setMinimumSize(200, 200)
-        self.setMaximumSize(200, 200)
-        self.setStyleSheet("""
-            QLabel {
-                border: 1px solid #ccc;
-                border-radius: 5px;
-                padding: 5px;
-                background-color: white;
-            }
-            QLabel:hover {
-                border: 1px solid #999;
-                background-color: #f0f0f0;
-            }
-        """)
-        self.load_image()
-
-    def load_image(self):
-        """加载并显示图片"""
-        try:
-            pixmap = QPixmap(self.file_path)
-            if not pixmap.isNull():
-                scaled_pixmap = pixmap.scaled(
-                    190, 190,  # 略小于标签大小，留出边距
-                    Qt.AspectRatioMode.KeepAspectRatio,
-                    Qt.TransformationMode.SmoothTransformation
-                )
-                self.setPixmap(scaled_pixmap)
-                # 设置工具提示显示文件路径
-                self.setToolTip(self.file_path)
-            else:
-                self.setText("无法加载图片")
-        except Exception as e:
-            self.setText("加载错误")
-            log.error(f"Error loading image {self.file_path}: {str(e)}")
-
-    def mousePressEvent(self, event):
-        """处理鼠标点击事件"""
-        if event.button() == Qt.MouseButton.LeftButton:
-            # 在默认图片查看器中打开图片
-            if CURRENT_OS == 'linux':
-                os.system(f'xdg-open "{self.file_path}"')  # Linux
-            elif CURRENT_OS == 'windows':
-                os.startfile(self.file_path) # Windows
-            elif CURRENT_OS == 'macos':
-                os.system(f'open "{self.file_path}"')   # MacOS
-            else:
-                raise ValueError("Unsupported OS")
-
-class RefreshWorker(QThread):
-    """后台刷新线程"""
-    progress = pyqtSignal(str, int, int)  # 当前文件夹，当前进度，总数
-    finished = pyqtSignal(dict)  # 完成信号，返回统计信息
-    error = pyqtSignal(str)  # 错误信号
-
-    def __init__(self, indexer, folders):
-        super().__init__()
-        self.indexer = indexer
-        self.folders = folders
-
-    def run(self):
-        try:
-            stats = {
-                'added': 0,    # 新增文件数
-                'updated': 0,  # 更新文件数
-                'removed': 0   # 删除文件数
-            }
-            
-            for folder in self.folders:
-                # 获取文件夹中的所有文件
-                current_files = set(self.indexer.file_scanner.scan_directory(folder))
-                    
-                # 获取数据库中该文件夹的所有文件
-                db_files = set(MediaFileDao.get_media_files_by_folder(folder))
-                    
-                # 计算需要添加、删除的文件
-                files_to_add = current_files - db_files
-                files_to_remove = db_files - current_files
-                    
-                # 删除不存在的文件记录
-                for file_path in files_to_remove:
-                    mf_list = MediaFileDao.get_media_files_by_file_path(file_path)
-                    for mf in mf_list:
-                        if mf.file_type == 'video':
-                            vf_list = VideoFrameDao.get_video_frames_by_media_file_id(mf.id)
-                            for vf in vf_list:
-                                VideoFrameDao.delete_video_frame(vf)
-                            
-                        MediaFileDao.delete_media_file(mf)
-                            
-                    stats['removed'] += 1
-
-                # 添加新文件
-                total_files = len(files_to_add)
-                for i, file_path in enumerate(files_to_add, 1):
-                    if self.indexer.index_single_file(file_path):
-                        stats['added'] += 1
-                    self.progress.emit(folder, i, total_files)
-
-            self.finished.emit(stats)
-        except Exception as e:
-            self.error.emit(str(e))
-
-class SearchWorker(QThread):
-    """后台搜索线程"""
-    finished = pyqtSignal(list)  # 完成信号，返回搜索结果
-    error = pyqtSignal(str)  # 错误信号
-
-    def __init__(self, search_engine, query, type):
-        super().__init__()
-        self.search_engine = search_engine
-        self.query = query
-        self.type = type
-
-    def run(self):
-        try:
-            if type == 'image':
-                results = self.search_engine.image_search(self.query)
-            else:
-                results = self.search_engine.text_search(self.query)
-            self.finished.emit(results)
-        except Exception as e:
-            self.error.emit(str(e))
 
 class MainWindow(QMainWindow):
     def __init__(self, parent=None):
         super(MainWindow, self).__init__(parent)
         
         try:
-            # self.setMinimumSize(WINDOW_MIN_WIDTH, WINDOW_MIN_HEIGHT)
-            self.resize(WINDOW_MIN_WIDTH, WINDOW_MIN_HEIGHT)
+            self.setMinimumSize(WINDOW_MIN_WIDTH, WINDOW_MIN_HEIGHT)
+            # self.resize(WINDOW_MIN_WIDTH, WINDOW_MIN_HEIGHT)
             self.setWindowTitle(WINDOW_TITLE)
             self.setCenter()
+            # 禁用最大化按钮
+            self.setWindowFlags(self.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
             
             # 初始化核心组件
             self.indexer = Indexer()
-            self.search_engine = SearchEngine()
+            FeatureExtractor()
             
             # 添加已索引文件夹列表
             self.indexed_folders = set()
@@ -238,11 +69,11 @@ class MainWindow(QMainWindow):
         # 创建菜单栏
         menubar = self.menuBar()
         
-        # 添加设置菜单
-        settings_menu = menubar.addMenu("设置")
+        # 添加显示菜单
+        shows_menu = menubar.addMenu("显示")
         
         # 添加显示索引文件夹动作
-        show_folders_action = settings_menu.addAction("显示索引文件夹")
+        show_folders_action = shows_menu.addAction("索引文件夹")
         show_folders_action.triggered.connect(self.show_indexed_folders)
         
         # 创建中心部件
@@ -301,23 +132,47 @@ class MainWindow(QMainWindow):
 
     def show_indexed_folders(self):
         """显示当前索引的文件夹"""
-        if not self.indexed_folders:
-            # QMessageBox.information(self, "提示", "没有已索引的文件夹")
-            # 从数据库加载已索引的文件夹
-            self.load_indexed_folders()
-            # return
-        # 以列表形式显示已索引的文件夹
+        self.load_indexed_folders()
 
         file_path_count = FilePathDao.file_path_count()
-
         self._show_status_bar_message(f"当前已索引的文件夹数量：{file_path_count}", 5000)
 
-        folders = "\n".join(self.indexed_folders)
-        QMessageBox.information(
-            self,
-            "已索引文件夹",
-            f"当前已索引的文件夹：\n\n{folders}"
-        )
+        # 创建并显示文件夹对话框
+        dialog = QDialog(self)
+        dialog.setWindowTitle("已索引文件夹")
+        dialog.setMinimumSize(500, 300)
+        
+        layout = QVBoxLayout()
+        
+        # 添加文件夹列表
+        list_widget = QListWidget()
+        for folder in sorted(self.indexed_folders):
+            item = QListWidgetItem(folder)
+            list_widget.addItem(item)
+            
+            # 创建刷新按钮
+            refresh_btn = QPushButton("刷新")
+            refresh_btn.clicked.connect(lambda checked, f=folder: self.refresh_folder(f))
+            
+            # 创建布局并添加按钮
+            item_widget = QWidget()
+            item_layout = QHBoxLayout()
+            item_layout.addWidget(QLabel(folder))
+            item_layout.addWidget(refresh_btn)
+            # item_layout.setContentsMargins(0, 0, 0, 0)
+            item_widget.setLayout(item_layout)
+            
+            list_widget.setItemWidget(item, item_widget)
+        
+        layout.addWidget(list_widget)
+
+        # 添加关闭按钮
+        close_btn = QPushButton("关闭")
+        close_btn.clicked.connect(dialog.close)
+        layout.addWidget(close_btn)
+        
+        dialog.setLayout(layout)
+        dialog.exec()
 
     def create_results_area(self):
         """创建优化的结果显示区域"""
@@ -355,14 +210,15 @@ class MainWindow(QMainWindow):
         folders = FilePathDao.get_indexed_folders()
 
         for file_path in folders:
-            folder = os.path.dirname(file_path)
-            self.indexed_folders.add(folder)
+            self.indexed_folders.add(file_path)
         
         # 如果有已索引的文件夹，启用刷新按钮
         self.refresh_btn.setEnabled(len(self.indexed_folders) > 0)
 
     def refresh_indexes(self):
         """刷新所有已索引文件夹"""
+        self.load_indexed_folders()
+        
         if not self.indexed_folders:
             QMessageBox.information(self, "提示", "没有已索引的文件夹")
             return
@@ -400,6 +256,7 @@ class MainWindow(QMainWindow):
         """更新刷新进度"""
         if self.progress_dialog:
             folder_name = os.path.basename(current_folder)
+            log.info(f"正在刷新文件夹: {current_folder}")
             self.progress_dialog.setLabelText(
                 f"正在刷新文件夹: {folder_name}\n"
                 f"进度: {current}/{total}"
@@ -411,9 +268,6 @@ class MainWindow(QMainWindow):
         if self.progress_dialog:
             self.progress_dialog.close()
             self.progress_dialog = None
-        
-        # 重建搜索索引
-        # self.search_engine.build_index()
         
         # 显示结果统计
         message = (
@@ -441,28 +295,19 @@ class MainWindow(QMainWindow):
             self.loading_dialog.setCancelButton(None)  # 禁用取消按钮
             self.loading_dialog.show()
             
-            
-            # 重建搜索索引
-            # self.search_engine.build_index()
-            
             # 关闭加载对话框
             self.loading_dialog.close()
             
             # 更新状态栏
             self._show_status_bar_message(f"搜索索引加载完成", 1000)
-            
         except Exception as e:
-            log.error(f"Error rebuilding search index: {str(e)}")
-            traceback.print_exc()
+            log.error(f"Error rebuilding search index:", e)
             QMessageBox.warning(self, "错误", "搜索索引重建失败，请重新运行程序")
             
     def indexing_finished(self, stats: dict):
         """索引完成处理"""
         if hasattr(self, 'progress_dialog') and self.progress_dialog:
             self.progress_dialog.close()
-        
-        # 重建搜索索引
-        # self.search_engine.build_index()
         
         # 显示统计信息
         message = (
@@ -517,9 +362,6 @@ class MainWindow(QMainWindow):
         if self.progress_dialog:
             self.progress_dialog.close()
         
-        # 重建搜索索引
-        # self.search_engine.build_index()
-        
         QMessageBox.information(self, "完成", "索引建立完成！")
 
     def indexing_error(self, error_msg):
@@ -559,7 +401,7 @@ class MainWindow(QMainWindow):
             self.progress_dialog.setMinimumDuration(0)  # 立即显示
             
             # 创建搜索线程
-            self.search_worker = SearchWorker(self.search_engine, query, 'text')
+            self.search_worker = SearchWorker(query, 'text')
             self.search_worker.finished.connect(self._search_finished)
             self.search_worker.error.connect(self._search_error)
             
@@ -577,11 +419,15 @@ class MainWindow(QMainWindow):
 
     def open_image_search(self):
         """打开图片搜索对话框"""
+        image_types = ""
+        for img in IMAGE_EXTENSIONS:
+            image_types = image_types + "*" + img + " "
+
         file_name, _ = QFileDialog.getOpenFileName(
             self,
             "选择搜索图片",
             "",
-            "Images (*.png *.jpg *.jpeg)"
+            f"Images ({image_types})"
         )
         
         if not file_name:
@@ -603,7 +449,7 @@ class MainWindow(QMainWindow):
             self.progress_dialog.setMinimumDuration(0)  # 立即显示
             
             # 创建搜索线程
-            self.search_worker = SearchWorker(self.search_engine, file_name, 'image')
+            self.search_worker = SearchWorker(file_name, 'image')
             self.search_worker.finished.connect(self._search_finished)
             self.search_worker.error.connect(self._search_error)
             
@@ -619,12 +465,14 @@ class MainWindow(QMainWindow):
             )
             self._show_status_bar_message("搜索失败", 5000)
 
-    def _search_finished(self, results):
+    def _search_finished(self, results, is_empty):
         """搜索完成处理"""
         if self.progress_dialog:
             self.progress_dialog.close()
+        if is_empty:
+            self._show_status_bar_message("请选择 ‘添加索引文件夹’ 添加文件到索引中")
+            return
         self.display_results(results)
-        self._show_status_bar_message(f"找到 {len(results)} 个结果")
 
     def _search_error(self, error_msg):
         """搜索错误处理"""
@@ -639,6 +487,9 @@ class MainWindow(QMainWindow):
 
     def display_results(self, results):
         """优化的结果显示方法"""
+        if not results or len(results) == 0:
+            self._show_status_bar_message("没有找到匹配的结果")
+            return
         # 存储所有结果
         self.all_results = results
         self.current_page = 0
@@ -662,6 +513,9 @@ class MainWindow(QMainWindow):
         
         # 连接滚动事件
         self.scroll_area.verticalScrollBar().valueChanged.connect(self.check_scroll_bottom)
+        # 回到顶部
+        self.scroll_area.verticalScrollBar().setValue(0)
+        self._show_status_bar_message(f"找到 {len(results)} 个结果")
 
     def check_scroll_bottom(self):
         """检查是否滚动到底部"""
@@ -716,7 +570,7 @@ class MainWindow(QMainWindow):
             thumbnail_path = media_file.file_path
         else:
             thumbnail_path = metadata['frame_path']
-            
+        
         thumbnail = ImageLabel(thumbnail_path) # QLabel()
         thumbnail.setAlignment(Qt.AlignmentFlag.AlignCenter)  # 设置标签居中对齐
         # pixmap = QPixmap(thumbnail_path)
@@ -772,7 +626,7 @@ class MainWindow(QMainWindow):
         buttons_layout = QVBoxLayout(buttons_widget)
         buttons_layout.setSpacing(5)
         
-        if result_type == 'video':
+        if result_type == 'video' or result_type == 'video_frame':
             play_btn = QPushButton("播放片段")
             play_btn.setIcon(QIcon.fromTheme("media-playback-start"))
             play_btn.clicked.connect(
@@ -803,29 +657,28 @@ class MainWindow(QMainWindow):
             raise ValueError("Unsupported OS")
     
     def play_video_at_timestamp(self, video_path: str, timestamp: float):
-        """使用默认播放器播放视频，并尝试跳转到指定时间"""
+        """使用系统默认视频播放器播放视频，并尝试跳转到指定时间"""
         log.info(f"Playing video: {video_path}, timestamp: {timestamp}")
-        command = []
 
-        if CURRENT_OS == 'windows':
-            # 使用默认播放器
-            command = ['start', '', video_path]
-        elif CURRENT_OS == 'macos':  # macOS
-            # 使用默认播放器
-            command = ['open', video_path]
-        elif CURRENT_OS == 'linux':
-            # 使用默认播放器
-            command = ['xdg-open', video_path]
+        if CURRENT_OS == 'linux':
+            os.system(f'xdg-open "{video_path}"')
+        elif CURRENT_OS == 'windows':
+            os.system(f'start cmd /c "{video_path}" -t {timestamp}')
+        elif CURRENT_OS == 'macos':
+            os.system(f'open -R "{video_path}"')
         else:
             raise ValueError("Unsupported OS")
 
-        try:
-            subprocess.run(command, check=True)
-        except subprocess.CalledProcessError as e:
-            log.error(f"Error executing command: {e}")
-        except FileNotFoundError as e:
-            log.error("Command not found: ", e)
 
-        # 这里使用 ffplay 播放器（需要安装 ffmpeg）
-        # os.system(f'ffplay "{video_path}" -ss {timestamp}')
-        # 注意：具体的播放命令可能需要根据操作系统和安装的播放器进行调整
+    # 添加刷新已索引文件夹的方法
+    def refresh_indexed_folders(self):
+        self.load_indexed_folders()
+        list_widget = self.findChild(QListWidget)
+        if list_widget:
+            list_widget.clear()
+            list_widget.addItems(sorted(self.indexed_folders))
+
+    def refresh_folder(self, folder):
+        # 刷新指定文件夹的逻辑
+        print(f"Refreshing folder: {folder}")
+        # 这里可以添加具体的刷新逻辑

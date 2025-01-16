@@ -87,7 +87,8 @@ VECTOR_DB_PATH = os.path.join(VECTOR_DB_DIR, VECTOR_DB_NAME)
 # 媒体文件配置
 IMAGE_EXTENSIONS = config.get('Media', 'image_extensions', fallback='.jpg,.jpeg,.png,.gif,.bmp').split(',')
 VIDEO_EXTENSIONS = config.get('Media', 'video_extensions', fallback='.mp4,.avi,.mov,.mkv,.wmv,.flv,.avi,.rmvb,.webm').split(',')
-MAX_IMAGE_SIZE = config.getint('Media', 'max_image_size', fallback=224)
+VIDEO_FRAME_INTERVAL = config.get('Media', 'video_frame_interval', fallback=0.5)
+MAX_SEARCH_RESULT_SIZE = config.getint('Media', 'max_search_result_size', fallback=200)
 BATCH_SIZE = config.getint('Media', 'batch_size', fallback=32)
 
 # 界面配置

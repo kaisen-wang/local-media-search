@@ -2,6 +2,7 @@ import sys
 import logging
 from PyQt6.QtWidgets import QApplication, QMessageBox
 from PyQt6.QtGui import QIcon
+from src.utils import check_model_files
 from src.gui.main_window import MainWindow
 from src.database.init import init_db
 from src.config import setup_logging, LOGGER_LEVEL
@@ -24,7 +25,7 @@ def main():
     # 初始化日志
     setup_logging(LOGGER_LEVEL)
     logger = logging.getLogger(__name__)
-    
+
     # 创建应用实例
     app = QApplication(sys.argv)
     
@@ -41,11 +42,14 @@ def main():
     try:
         # 创建并显示主窗口
         window = MainWindow()
-        window.show()
         
         # 记录主窗口显示
-        logger.info("主窗口已显示")
+        logger.info("主窗口显示")
+        window.show()
         
+        # 检查模型文件
+        check_model_files()
+
         # 启动事件循环
         logger.info("启动应用程序事件循环")
         return app.exec()

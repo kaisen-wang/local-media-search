@@ -1,11 +1,7 @@
 import os
 import logging
-from sqlalchemy import event
-from sqlalchemy import create_engine, text
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.exc import OperationalError
+import sqlite3
 from src.config import DB_PATH
-from .base import Base
 from time import sleep
 
 log = logging.getLogger(__name__)
@@ -24,34 +20,7 @@ class SQLiteDB:
         """初始化数据库"""
         try:
             self.db_path = DB_PATH
-            # 使用连接池和超时配置引擎
-            self.engine = create_engine(
-                f'sqlite:///{DB_PATH}',
-                echo=False,
-                pool_size=10,
-                max_overflow=20,
-                pool_timeout=30,
-                connect_args={
-                    'timeout': 30,  # 最多等待 30 秒进行锁定
-                    'check_same_thread': False  # 允许多个线程
-                }
-            )
             
-            # 启用 WAL 模式以获得更好的并发性
-            def _enable_wal(dbapi_conn, connection_record):
-                dbapi_conn.execute('PRAGMA journal_mode=WAL')
-                dbapi_conn.execute('PRAGMA synchronous=NORMAL')
-                dbapi_conn.execute('PRAGMA busy_timeout=30000')  # 30 秒超时
-                
-            event.listen(self.engine, 'connect', _enable_wal)
-            
-            self.Session = sessionmaker(
-                bind=self.engine,
-                autocommit=False,
-                autoflush=False,
-                expire_on_commit=False
-            )
-
             # 如果数据库文件存在但无法写入，尝试删除它
             if os.path.exists(self.db_path):
                 try:
@@ -63,43 +32,46 @@ class SQLiteDB:
                     os.remove(self.db_path)
                     log.error(f"Removed old database at {self.db_path}")
             
-            # 创建新的数据库和表
-            Base.metadata.create_all(self.engine)
-            log.info(f"Created new database at {self.db_path}")
+            # 创建数据库连接
+            self.conn = sqlite3.connect(
+                self.db_path,
+                timeout=30,
+                check_same_thread=False
+            )
+            self.conn.execute('PRAGMA journal_mode=WAL')
+            self.conn.execute('PRAGMA synchronous=NORMAL')
+            self.conn.execute('PRAGMA busy_timeout=30000')
             
             # 设置数据库文件权限为 600 (只有用户可以读写)
             os.chmod(self.db_path, 0o600)
             
             # 测试数据库连接
-            session = self.Session()
-            try:
-                session.execute(text("SELECT 1"))
-                session.commit()
-                log.info("数据库连接测试成功")
-            finally:
-                session.close()
+            self.conn.execute("SELECT 1")
+            log.info("数据库连接测试成功")
             
         except Exception as e:
             log.error(f"Error initializing database: {str(e)}")
             raise
 
-    def get_session(self):
-        """获取新的数据库会话"""
-        session = self.Session()
-        # 为数据库锁添加重试逻辑
+    def get_connection(self):
+        """获取数据库连接"""
+        return self.conn
+        # max_retries = 3
+        # retry_delay = 1  # 秒
         
-        max_retries = 3
-        retry_delay = 1  # 秒
-        
-        for attempt in range(max_retries):
-            try:
-                # 测试连接
-                session.execute(text("SELECT 1"))
-                return session
-            except OperationalError as e:
-                if "database is locked" in str(e) and attempt < max_retries - 1:
-                    log.warning(f"Database locked, retrying in {retry_delay} seconds...")
-                    sleep(retry_delay)
-                    retry_delay *= 2  # 指数回退
-                    continue
-                raise
+        # for attempt in range(max_retries):
+        #     try:
+        #         # 测试连接
+        #         self.conn.execute("SELECT 1")
+        #         return self.conn
+        #     except sqlite3.OperationalError as e:
+        #         if "database is locked" in str(e) and attempt < max_retries - 1:
+        #             log.warning(f"Database locked, retrying in {retry_delay} seconds...")
+        #             sleep(retry_delay)
+        #             retry_delay *= 2  # 指数回退
+        #             continue
+        #         raise
+
+    def get_cursor(self):
+        """获取数据库游标"""
+        return self.get_connection().cursor()

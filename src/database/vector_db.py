@@ -1,7 +1,7 @@
 import logging
 import chromadb
 from typing import List
-from src.config import VECTOR_DB_PATH
+from src.config import VECTOR_DB_PATH, MAX_SEARCH_RESULT_SIZE
 
 log = logging.getLogger(__name__)
 
@@ -75,6 +75,9 @@ class VectorDB:
         # offset = (page_number - 1) * page_size
         # limit = page_size
 
+        if MAX_SEARCH_RESULT_SIZE > 0:
+            n_results = MAX_SEARCH_RESULT_SIZE
+
         result = self.collection.query(
             query_embeddings=[query_embeddings],
             n_results=n_results,
@@ -92,7 +95,7 @@ class VectorDB:
             # 将距离转换为相似度得分 确保相似度得分在合理范围内
             score = (distance + 1) / 2
  
-            log.info(f"相似度得分 Score: {score}; Distance: {distance};")
+            log.debug(f"相似度得分 Score: {score}; Distance: {distance};")
 
             formatted_results.append({
                 'id': result['ids'][0][i],

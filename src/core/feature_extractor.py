@@ -10,7 +10,17 @@ import logging
 log = logging.getLogger(__name__)
 
 class FeatureExtractor:
-    def __init__(self):
+    """特征提取器"""
+    _instance = None
+
+    def __new__(cls):
+        if cls._instance is None:
+            log.info("创建 FeatureExtractor 实例")
+            cls._instance = super(FeatureExtractor, cls).__new__(cls)
+            cls._instance._init_model()
+        return cls._instance
+
+    def _init_model(self):
         try:
             log.info("正在初始化文本特征提取模型 ChineseCLIP...")
             log.info(f"模型: {MODEL_NAME}")
@@ -134,7 +144,7 @@ class FeatureExtractor:
             log.error("============================")
             return None
 
-    def calculate_similarity(self, features1: np.ndarray, features2: np.ndarray) -> float:
+    def calculate_similarity(features1: np.ndarray, features2: np.ndarray) -> float:
         """计算两个特征向量之间的相似度"""
         try:
             if features1 is None or features2 is None:
