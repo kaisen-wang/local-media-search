@@ -78,7 +78,7 @@ class Indexer:
                     feature_list=features.tolist()
                 )
 
-                log.info(f"已成功编制索引的图像: {file_path}")
+                log.info(f"成功索引图像: {file_path}")
                 return True
                 
             else:
@@ -119,6 +119,10 @@ class Indexer:
                     'duration': total_frames / fps
                 }
             )
+
+            if media_file is None:
+                log.warning(f"无法创建视频文件记录数据库保存失败！file_path: {file_path}")
+                return False
 
             try:
                 frame_count = 0
@@ -180,7 +184,7 @@ class Indexer:
                     log.warning(f"No frames were successfully processed for {file_path}")
                     return False
 
-                log.info(f"Successfully indexed video {file_path} with {successful_frames} frames")
+                log.info(f"成功索引视频 {file_path} 共 {successful_frames} 帧")
                 return True
 
             except Exception as e:

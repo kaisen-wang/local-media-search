@@ -1,8 +1,10 @@
 import os
-from src.config import MODEL_NAME
+import time
+import random
 
 def check_model_files():
     """检查模型文件是否存在并完整"""
+    MODEL_NAME = ''
     required_files = ['config.json', 'pytorch_model.bin', 'clip_cn_vit-b-16.pt']
     
     if not os.path.exists(MODEL_NAME):
@@ -41,3 +43,15 @@ def delete_folder(folder_path: str):
                 os.remove(file_path)
             elif os.path.isdir(file_path):
                 delete_folder(file_path)
+
+def generate_id() -> int:
+    """雪花算法生成数据库ID"""
+    # 获取当前时间戳（毫秒级）
+    timestamp = int(time.time() * 1000)
+    # 生成一个随机数
+    random_number = random.randint(0, 4095)  # 12位随机数
+    # 组合成唯一的ID
+    unique_id = (timestamp << 12) | random_number
+    return unique_id
+
+
