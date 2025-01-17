@@ -44,7 +44,7 @@ class ImageLabel(QLabel):
                 self.setText("无法加载图片")
         except Exception as e:
             self.setText("加载错误")
-            log.error(f"Error loading image {self.file_path}:", e)
+            log.exception(f"Error loading image {self.file_path}:")
 
     def mousePressEvent(self, event):
         """处理鼠标点击事件"""

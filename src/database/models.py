@@ -19,11 +19,10 @@ class FilePath:
         """创建表SQL"""
         return """
             CREATE TABLE IF NOT EXISTS file_paths (
-                id INTEGER NOT NULL, 
-                file_path VARCHAR NOT NULL, 
-                created_at DATETIME, 
-                last_modified DATETIME, 
-                PRIMARY KEY (id), 
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                file_path VARCHAR NOT NULL,
+                created_at DATETIME,
+                last_modified DATETIME,
                 UNIQUE (file_path)
             )
         """
@@ -48,11 +47,14 @@ class MediaFile:
                 file_metadata VARCHAR, 
                 created_at DATETIME, 
                 last_modified DATETIME, 
-                PRIMARY KEY (id), 
-                UNIQUE (file_path)
+                PRIMARY KEY (id)
             )
         """
-        
+    
+    def create_table_index_sql() -> str:
+        """索引SQL"""
+        return "CREATE INDEX IF NOT EXISTS idx_file_path ON media_files (file_path)"
+
 class VideoFrame:
     def __init__(self, id=None, media_file_id=None, frame_number=None, timestamp=None, frame_path=None):
         self.id = id
@@ -70,10 +72,13 @@ class VideoFrame:
                 frame_number INTEGER, 
                 timestamp FLOAT, 
                 frame_path VARCHAR, 
-                PRIMARY KEY (id), 
-                FOREIGN KEY(media_file_id) REFERENCES media_files (id)
+                PRIMARY KEY (id)
             )
         """
+
+    def create_table_index_sql() -> str:
+        """索引SQL"""
+        return "CREATE INDEX IF NOT EXISTS idx_media_file_id ON video_frames (media_file_id)"
 
 
 
@@ -82,14 +87,14 @@ class FilePathDao:
     def create_table() -> None:
         """不存在时创建表"""
         conn = SQLiteDB().get_connection()
-        cursor = conn.cursor()
+        cursor = SQLiteDB().get_cursor()
         try:
             cursor.execute(FilePath.create_table_sql())
             conn.commit()
             log.info("Created file_paths table")
         except Exception as e:
             conn.rollback()
-            log.error("Error creating file_paths table: ", e)
+            log.exception("Error creating file_paths table: ")
         finally:
             cursor.close()
 
@@ -102,7 +107,7 @@ class FilePathDao:
             count = cursor.fetchone()[0]
             now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             if count <= 0:
-                cursor.execute(
+                conn.execute(
                     "INSERT INTO file_paths (file_path, created_at, last_modified) VALUES (?, ?, ?)",
                     (file_path, now, now)
                 )
@@ -110,7 +115,7 @@ class FilePathDao:
                 return True
         except Exception as e:
             conn.rollback()
-            log.error("Error adding file path: ", e)
+            log.exception("Error adding file path: ")
         finally:
             cursor.close()
         return False
@@ -118,13 +123,13 @@ class FilePathDao:
     def file_path_count() -> int:
         """统计文件路径总数"""
         conn = SQLiteDB().get_connection()
-        cursor = conn.cursor()
+        cursor = SQLiteDB().get_cursor()
         try:
             cursor.execute("SELECT COUNT(*) FROM file_paths")
             count = cursor.fetchone()[0]
             return count or 0
         except Exception as e:
-            log.error("统计文件路径总数错误:", e)
+            log.exception("统计文件路径总数错误:")
         finally:
             cursor.close()
         return 0
@@ -132,12 +137,12 @@ class FilePathDao:
     def get_indexed_folders() -> List[str]:
         """获取所有已索引文件的目录"""
         conn = SQLiteDB().get_connection()
-        cursor = conn.cursor()
+        cursor = SQLiteDB().get_cursor()
         try:
             cursor.execute("SELECT file_path FROM file_paths")
             return [row[0] for row in cursor.fetchall()]
         except Exception as e:
-            log.error("Error getting indexed folders:", e)
+            log.exception("Error getting indexed folders:")
         finally:
             cursor.close()
         return []
@@ -148,14 +153,15 @@ class MediaFileDao:
     def create_table() -> None:
         """不存在时创建表"""
         conn = SQLiteDB().get_connection()
-        cursor = conn.cursor()
+        cursor = SQLiteDB().get_cursor()
         try:
             cursor.execute(MediaFile.create_table_sql())
+            cursor.execute(MediaFile.create_table_index_sql())
             conn.commit()
             log.info("Created media_files table")
         except Exception as e:
             conn.rollback()
-            log.error("Error creating media_files table: ", e)
+            log.exception("Error creating media_files table: ")
         finally:
             cursor.close()
 
@@ -165,15 +171,15 @@ class MediaFileDao:
             return False
             
         conn = SQLiteDB().get_connection()
-        cursor = conn.cursor()
+        cursor = SQLiteDB().get_cursor()
         try:
-            cursor.execute("SELECT COUNT(*) FROM media_files WHERE file_path = ?", (file_path,))
+            cursor.execute("SELECT COUNT(*) as count_1 FROM media_files WHERE file_path = ?", (file_path,))
             count = cursor.fetchone()
-            if count is None:
+            if count is None or count[0] is None:
                 return False
             return count[0] > 0
         except Exception as e:
-            log.error("检查文件是否已编入索引时出错: %s", str(e))
+            log.exception("检查文件是否已编入索引时出错:")
         finally:
             cursor.close()
         return False
@@ -181,7 +187,7 @@ class MediaFileDao:
     def is_empty() -> bool:
         """判断数据库中media_files表是否为空"""
         conn = SQLiteDB().get_connection()
-        cursor = conn.cursor()
+        cursor = SQLiteDB().get_cursor()
         try:
             cursor.execute("SELECT COUNT(*) as count_1 FROM media_files")
             value = cursor.fetchone()
@@ -189,7 +195,7 @@ class MediaFileDao:
                 return True
             return value[0] == 0
         except Exception as e:
-            log.error("Error checking if database is empty: ", e)
+            log.exception("Error checking if database is empty: ")
         finally:
             cursor.close()
         return True
@@ -197,12 +203,11 @@ class MediaFileDao:
     def add_media_file(file_path: str, file_type: str, feature_list: List[float] = None, metadata: dict = None) -> MediaFile:
         """添加媒体文件"""
         conn = SQLiteDB().get_connection()
-        cursor = conn.cursor()
         try:
-            file_metadata = json.dumps(metadata) if metadata else None
+            file_metadata = json.dumps(metadata) if metadata is not None else None
             now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             id = generate_id()
-            cursor.execute(
+            conn.execute(
                 "INSERT INTO media_files (id, file_path, file_type, file_metadata, created_at, last_modified) VALUES (?, ?, ?, ?, ?, ?)",
                 (id, file_path, file_type, file_metadata, now, now)
             )
@@ -219,15 +224,13 @@ class MediaFileDao:
             )
         except Exception as e:
             conn.rollback()
-            log.error("添加媒体文件异常:", e)
-        finally:
-            cursor.close()
+            log.exception("添加媒体文件异常")
         return None
 
     def get_media_files_by_id(id: int) -> MediaFile:
         """根据id获取媒体文件"""
         conn = SQLiteDB().get_connection()
-        cursor = conn.cursor()
+        cursor = SQLiteDB().get_cursor()
         try:
             cursor.execute("SELECT * FROM media_files WHERE id = ?", (id,))
             row = cursor.fetchone()
@@ -235,7 +238,7 @@ class MediaFileDao:
                 return MediaFile(*row)
             return None
         except Exception as e:
-            log.error("Error getting media file by id: ", e)
+            log.exception("Error getting media file by id: ")
         finally:
             cursor.close()
         return None
@@ -243,7 +246,7 @@ class MediaFileDao:
     def get_media_files_by_folder(folder_path: str) -> List[str]:
         """获取数据库中该文件夹的所有文件"""
         conn = SQLiteDB().get_connection()
-        cursor = conn.cursor()
+        cursor = SQLiteDB().get_cursor()
         try:
             cursor.execute("SELECT * FROM media_files WHERE file_path LIKE ?", (f"{folder_path}%",))
             values = cursor.fetchall()
@@ -251,7 +254,7 @@ class MediaFileDao:
                 return []
             return [row[1] for row in values]
         except Exception as e:
-            log.error("Error getting media files by folder: ", e)
+            log.exception("Error getting media files by folder: ")
         finally:
             cursor.close()
         return []
@@ -259,12 +262,12 @@ class MediaFileDao:
     def get_media_files_by_file_path(file_path: str) -> List[MediaFile]:
         """根据file_path获取媒体文件"""
         conn = SQLiteDB().get_connection()
-        cursor = conn.cursor()
+        cursor = SQLiteDB().get_cursor()
         try:
             cursor.execute("SELECT * FROM media_files WHERE file_path = ?", (file_path,))
             return [MediaFile(*row) for row in cursor.fetchall()]
         except Exception as e:
-            log.error("Error getting media file by file_path: ", e)
+            log.exception("Error getting media file by file_path: ")
         finally:
             cursor.close()
         return []
@@ -272,14 +275,14 @@ class MediaFileDao:
     def delete_media_file(media_file: MediaFile):
         """删除媒体文件"""
         conn = SQLiteDB().get_connection()
-        cursor = conn.cursor()
+        cursor = SQLiteDB().get_cursor()
         try:
             cursor.execute("DELETE FROM media_files WHERE id = ?", (media_file.id,))
             conn.commit()
             VectorDB().delete_feature_vector_by_ids([str(media_file.id)])
         except Exception as e:
             conn.rollback()
-            log.error("Error deleting media file: ", e)
+            log.exception("Error deleting media file: ")
         finally:
             cursor.close()
 
@@ -288,24 +291,24 @@ class VideoFrameDao:
     def create_table() -> None:
         """不存在时创建表"""
         conn = SQLiteDB().get_connection()
-        cursor = conn.cursor()
+        cursor = SQLiteDB().get_cursor()
         try:
             cursor.execute(VideoFrame.create_table_sql())
+            cursor.execute(VideoFrame.create_table_index_sql())
             conn.commit()
             log.info("video_frames table created")
         except Exception as e:
             conn.rollback()
-            log.error("Error creating video_frames table: ", e)
+            log.exception("Error creating video_frames table: ")
         finally:
             cursor.close()
 
     def add_video_frame(media_file_id: int, frame_number: int, timestamp: float, frame_path: str, file_path: str, feature_list: List[float] = None) -> VideoFrame:
         """添加视频帧"""
         conn = SQLiteDB().get_connection()
-        cursor = conn.cursor()
         try:
             id = generate_id()
-            cursor.execute(
+            conn.execute(
                 "INSERT INTO video_frames (id, media_file_id, frame_number, timestamp, frame_path) VALUES (?, ?, ?, ?, ?)",
                 (id, media_file_id, frame_number, timestamp, frame_path)
             )
@@ -328,20 +331,17 @@ class VideoFrameDao:
             )
         except Exception as e:
             conn.rollback()
-            log.error("Error adding video frame: ", e)
-            raise Exception(f"Error adding video frame:", e)
-        finally:
-            cursor.close()
+            log.exception("Error adding video frame: ")
 
     def get_video_frames_by_media_file_id(media_file_id: int) -> List[VideoFrame]:
         """根据media_file_id获取视频帧"""
         conn = SQLiteDB().get_connection()
-        cursor = conn.cursor()
+        cursor = SQLiteDB().get_cursor()
         try:
             cursor.execute("SELECT * FROM video_frames WHERE media_file_id = ?", (media_file_id,))
             return [VideoFrame(*row) for row in cursor.fetchall()]
         except Exception as e:
-            log.error("Error getting video frames by media_file_id: ", e)
+            log.exception("Error getting video frames by media_file_id: ")
         finally:
             cursor.close()
         return []
@@ -349,27 +349,27 @@ class VideoFrameDao:
     def delete_video_frame(video_frame: VideoFrame):
         """删除视频帧"""
         conn = SQLiteDB().get_connection()
-        cursor = conn.cursor()
+        cursor = SQLiteDB().get_cursor()
         try:
             cursor.execute("DELETE FROM video_frames WHERE id = ?", (video_frame.id,))
             conn.commit()
             VectorDB().delete_feature_vector_by_ids([str(video_frame.media_file_id) + '-' + str(video_frame.id)])
         except Exception as e:
             conn.rollback()
-            log.error("Error deleting video frame: ", e)
+            log.exception("Error deleting video frame: ")
         finally:
             cursor.close()
 
     def delete_video_frame_by_id(video_frame_id: int) -> None:
         """根据video_frame_id删除视频帧"""
         conn = SQLiteDB().get_connection()
-        cursor = conn.cursor()
+        cursor = SQLiteDB().get_cursor()
         try:
             cursor.execute("DELETE FROM video_frames WHERE id = ?", (video_frame_id,))
             conn.commit()
             VectorDB().delete_feature_vector_by_ids([str(video_frame_id)])
         except Exception as e:
             conn.rollback()
-            log.error("Error deleting video frame by id: ", e)
+            log.exception("Error deleting video frame by id: ")
         finally:
             cursor.close()

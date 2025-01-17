@@ -28,7 +28,7 @@ class Indexer:
                     if future.result():
                         indexed_files.append(file_path)
                 except Exception as e:
-                    log.error(f"Error indexing file {file_path}:", e)
+                    log.exception(f"Error indexing file {file_path}:")
 
         return indexed_files
 
@@ -49,7 +49,7 @@ class Indexer:
                 return self._index_video(file_path)
     
         except Exception as e:
-            log.error(f"Error indexing file {file_path}: ", e)
+            log.exception(f"Error indexing file {file_path}: ")
     
         return False
 
@@ -84,7 +84,7 @@ class Indexer:
                 return False
                 
         except Exception as e:
-            log.error(f"Error indexing image {file_path}: ", e)
+            log.exception(f"Error indexing image {file_path}: ")
             return False
 
     def _index_video(self, file_path: str) -> bool:
@@ -169,7 +169,7 @@ class Indexer:
                                     successful_frames += 1
 
                         except Exception as e:
-                            log.error(f"Error processing frame {frame_count}: ", e)
+                            log.exception(f"Error processing frame {frame_count}: ")
                             if os.path.exists(frame_path):
                                 os.remove(frame_path)
                             continue
@@ -188,12 +188,12 @@ class Indexer:
             except Exception as e:
                 # 清理创建的目录
                 delete_folder(frames_dir)
-                log.error(f"Error indexing video {file_path}: ", e)
+                log.exception(f"Error indexing video {file_path}: ")
                 return False
             
             finally:
                 cap.release()
 
         except Exception as e:
-            log.error(f"Error indexing video {file_path}: ", e)
+            log.exception(f"Error indexing video {file_path}: ")
             return False

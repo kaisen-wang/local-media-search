@@ -19,7 +19,7 @@ class SearchEngine:
                 return []
             return SearchEngine._search_with_features(query_features, page_number = page_number, page_size = page_size)
         except Exception as e:
-            log.error("Error in text search: ", e)
+            log.exception("Error in text search: ")
             return []
 
     def image_search(query_image_path: str, page_number: int = 1, page_size: int = 20) -> List[Tuple]:
@@ -32,7 +32,7 @@ class SearchEngine:
                 return []
             return SearchEngine._search_with_features(query_features, page_number = page_number, page_size = page_size)
         except Exception as e:
-            log.error("Error in image search: ", e)
+            log.exception("Error in image search: ")
             return []
 
     def _search_with_features(query_features: np.ndarray, page_number: int = 1, page_size: int = 20) -> List[Tuple]:
@@ -43,7 +43,7 @@ class SearchEngine:
                 return None
             return VectorDB().query(query_features.tolist(), page_number = page_number, page_size = page_size)
         except Exception as e:
-            log.error("Error in feature search: ", e)
+            log.exception("Error in feature search: ")
             return []
 
  

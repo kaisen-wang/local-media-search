@@ -4,6 +4,7 @@ from src.core.file_scanner import FileScanner
 from src.database.models import FilePathDao, MediaFileDao, VideoFrameDao
 import concurrent.futures
 import logging
+import os
 
 log = logging.getLogger(__name__)
 
@@ -32,8 +33,10 @@ class IndexingWorker(QThread):
             # 发送进度信号
             self.progress.emit(0, total_files)
 
+            max_worker = (os.cpu_count() or 1) + 4
+
             # 使用线程池并行处理文件
-            with concurrent.futures.ThreadPoolExecutor(thread_name_prefix='IndexingWorker') as executor:
+            with concurrent.futures.ThreadPoolExecutor(thread_name_prefix='IndexingWorker', max_workers=max_worker) as executor:
                 futures = {executor.submit(self.indexer.index_single_file, file_path): file_path for file_path in media_files}
                 for i, future in enumerate(concurrent.futures.as_completed(futures), 1):
                     # 检查停止标志
@@ -48,7 +51,7 @@ class IndexingWorker(QThread):
                         if future.result():
                             indexed_files.append(file_path)
                     except Exception as e:
-                        log.error(f"Error indexing file {file_path}:", e)
+                        log.exception(f"Error indexing file {file_path}:")
 
                     # 发送进度信号
                     self.progress.emit(i, total_files)
@@ -122,7 +125,7 @@ class RefreshWorker(QThread):
             if not self._stop_flag:
                 self.finished.emit(stats)
         except Exception as e:
-            log.error("刷新索引异常", e)
+            log.exception("刷新索引异常")
             self.error.emit(str(e))
 
     def stop(self):
@@ -156,5 +159,5 @@ class SearchWorker(QThread):
             
             self.finished.emit(results, is_empty)
         except Exception as e:
-            log.error("搜索文件异常", e)
+            log.exception("搜索文件异常")
             self.error.emit(str(e))

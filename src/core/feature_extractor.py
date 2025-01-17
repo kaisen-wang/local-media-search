@@ -30,7 +30,6 @@ class FeatureExtractor:
                 MODEL_NAME,
                 cache_dir=CACHE_DIR,
                 local_files_only=True,
-                trust_remote_code=True,
                 image_mean=[0.48145466, 0.4578275, 0.40821073],
                 image_std=[0.26862954, 0.26130258, 0.27577711]
             )
@@ -38,7 +37,6 @@ class FeatureExtractor:
             self.model = ChineseCLIPModel.from_pretrained(
                 MODEL_NAME,
                 cache_dir=CACHE_DIR,
-                trust_remote_code=True,
                 local_files_only=True,
                 torch_dtype=torch.float32
             ).to(DEVICE)
@@ -47,23 +45,20 @@ class FeatureExtractor:
             log.info("初始化完成")
             
         except Exception as e:
-            log.error("=== 模型初始化失败 ===")
-            log.error(f"Error type: {type(e).__name__}")
-            log.error("Error message: ", e)
-            log.error("===========================")
-            raise
+            log.exception("模型初始化失败")
+            raise e
 
     def extract_image_features(self, image_path: str) -> np.ndarray:
         """使用ChineseCLIP从图片文件提取特征"""
         if not image_path:
-            log.error("图像路径为空")
+            log.warning("图像路径为空")
             return None
         try:
             # 加载图片
             image = Image.open(image_path).convert('RGB')
             
             if not image:
-                log.error("无法加载图像 image_path:", image_path)
+                log.warning("无法加载图像 image_path:", image_path)
                 return None
 
             # 使用processor处理图片
@@ -82,11 +77,8 @@ class FeatureExtractor:
             return image_features.cpu().numpy()[0]
             
         except Exception as e:
-            log.error(f"=== Image Processing Error ===")
-            log.error(f"Error type: {type(e).__name__}")
-            log.error("Error message: ", e)
-            log.error("============================")
-            return None
+            log.exception("图像提取特征错误")
+            raise e
 
     def extract_text_features(self, text: Union[str, List[str]]) -> np.ndarray:
         """从文本中提取特征向量"""
@@ -114,12 +106,8 @@ class FeatureExtractor:
             return text_features.numpy()[0]
             
         except Exception as e:
-            log.error("=== Text Processing Error ===")
-            log.error(f"Input text: {text}")
-            log.error(f"Error type: {type(e).__name__}")
-            log.error("Error message: ", e)
-            log.error("===========================")
-            return None
+            log.exception("文本提取特征错误")
+            raise e
 
     def extract_frame_features(self, frame: np.ndarray) -> np.ndarray:
         """从视频帧提取特征"""
@@ -146,11 +134,8 @@ class FeatureExtractor:
             return image_features.cpu().numpy()[0]
             
         except Exception as e:
-            log.error(f"=== Frame Processing Error ===")
-            log.error(f"Error type: {type(e).__name__}")
-            log.error("Error message: ", e)
-            log.error("============================")
-            return None
+            log.exception("视频帧提取特征错误")
+            raise e
 
     def calculate_similarity(features1: np.ndarray, features2: np.ndarray) -> float:
         """计算两个特征向量之间的相似度"""
@@ -174,8 +159,5 @@ class FeatureExtractor:
             return float(similarity.cpu())
             
         except Exception as e:
-            log.error("=== Similarity Computation Error ===")
-            log.error(f"Error type: {type(e).__name__}")
-            log.error("Error message: ", e)
-            log.error("==================================")
+            log.exception("计算两个特征向量之间的相似度错误")
             return 0.0

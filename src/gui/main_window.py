@@ -1,4 +1,4 @@
-from PyQt6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
+from PyQt6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QSystemTrayIcon, QMenu,
                            QPushButton, QLineEdit, QLabel, QFileDialog, QScrollArea, QMessageBox, QProgressDialog,
                            QDialog, QListWidget, QListWidgetItem)
 from PyQt6.QtCore import Qt
@@ -19,6 +19,7 @@ class MainWindow(QMainWindow):
         super(MainWindow, self).__init__(parent)
         
         try:
+            self.create_system_tray_icon()
             # self.setMinimumSize(WINDOW_MIN_WIDTH, WINDOW_MIN_HEIGHT)
             self.resize(WINDOW_MIN_WIDTH, WINDOW_MIN_HEIGHT)
             self.setWindowTitle(WINDOW_TITLE)
@@ -43,7 +44,7 @@ class MainWindow(QMainWindow):
             # 初始化进度对话框
             self.progress_dialog = None
         except Exception as e:
-            log.error("Error in MainWindow initialization: ", e)
+            log.exception("Error in MainWindow initialization: ")
             QMessageBox.critical(
                 self,
                 "初始化错误",
@@ -51,6 +52,34 @@ class MainWindow(QMainWindow):
             )
             raise
     
+    def create_system_tray_icon(self):
+        """创建系统托盘图标"""
+        self.tray_icon = QSystemTrayIcon(self)
+        self.tray_icon.setIcon(QIcon("resources/logo.ico"))
+        
+        # 创建托盘菜单
+        tray_menu = QMenu()
+        
+        # 添加显示主窗口动作
+        show_action = tray_menu.addAction("显示主窗口")
+        show_action.triggered.connect(self.show)
+        
+        # 添加退出动作
+        quit_action = tray_menu.addAction("退出")
+        quit_action.triggered.connect(self.close)
+        
+        self.tray_icon.setContextMenu(tray_menu)
+        self.tray_icon.show()
+        
+        # 连接点击事件
+        self.tray_icon.activated.connect(self.on_tray_icon_activated)
+
+    def on_tray_icon_activated(self, reason):
+        """处理托盘图标点击事件"""
+        if reason == QSystemTrayIcon.ActivationReason.Trigger:
+            self.show()
+            self.activateWindow()
+
     def setCenter(self):
         screen = QGuiApplication.primaryScreen().size()
         size = self.geometry()
@@ -325,7 +354,7 @@ class MainWindow(QMainWindow):
             # 更新状态栏
             self._show_status_bar_message(f"搜索索引加载完成", 1000)
         except Exception as e:
-            log.error(f"Error rebuilding search index:", e)
+            log.exception(f"Error rebuilding search index:")
             QMessageBox.warning(self, "错误", "搜索索引重建失败，请重新运行程序")
             
     def indexing_finished(self, stats: dict):

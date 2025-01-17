@@ -54,7 +54,7 @@ def main():
         logger.info("启动应用程序事件循环")
         return app.exec()
     except Exception as e:
-        logger.error(f"应用程序运行出错: ", e, exc_info=True)
+        logger.exception("应用程序运行出错")
         QMessageBox.critical(
             None,
             "错误",

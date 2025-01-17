@@ -39,7 +39,7 @@ def setup_logging(logger_level = 'INFO'):
     os.makedirs(log_dir, exist_ok=True)
     
     # 日志格式
-    log_format = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    log_format = '%(asctime)s - %(levelname)s - %(process)d - %(thread)s - %(name)s.%(filename)s - %(funcName)s - %(lineno)d - %(message)s'
     formatter = logging.Formatter(log_format)
     
     # 文件日志 - 最大10MB，保留3个备份
@@ -50,15 +50,17 @@ def setup_logging(logger_level = 'INFO'):
         encoding='utf-8'
     )
     file_handler.setFormatter(formatter)
+    file_handler.setLevel(logger_level)
     
     # 控制台日志
     console_handler = logging.StreamHandler()
     console_handler.setFormatter(formatter)
+    console_handler.setLevel(logger_level) 
     
     # 根日志配置
     level = getattr(logging, logger_level)
     root_logger = logging.getLogger()
-    root_logger.setLevel(level)
+    root_logger.setLevel(logger_level)
     root_logger.addHandler(file_handler)
     root_logger.addHandler(console_handler)
     print(f"Logging level set to {str(logging.getLevelName(level))}")
