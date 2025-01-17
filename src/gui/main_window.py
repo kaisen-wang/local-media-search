@@ -264,6 +264,7 @@ class MainWindow(QMainWindow):
         self.progress_dialog.setWindowModality(Qt.WindowModality.WindowModal)
         self.progress_dialog.setAutoClose(True)
         self.progress_dialog.setAutoReset(True)
+        self.progress_dialog.setCancelButtonText("取消")
         
         # 创建工作线程处理所有文件夹
         self.refresh_worker = RefreshWorker(self.indexer, list(self.indexed_folders))
@@ -271,6 +272,7 @@ class MainWindow(QMainWindow):
         self.refresh_worker.finished.connect(self.refresh_finished)
         self.refresh_worker.error.connect(self.indexing_error)
         
+        self.progress_dialog.canceled.connect(self.refresh_stop)
         self.progress_dialog.show()
         self.refresh_worker.start()
 
@@ -358,7 +360,7 @@ class MainWindow(QMainWindow):
             self.progress_dialog.setWindowModality(Qt.WindowModality.WindowModal)
             self.progress_dialog.setAutoClose(True)
             self.progress_dialog.setAutoReset(True)
-            self.progress_dialog.setCancelButton(None)  # 禁用取消按钮
+            self.progress_dialog.setCancelButtonText("取消")
             
             # 创建索引线程
             self.index_worker = IndexingWorker(self.indexer, folder)
@@ -399,7 +401,16 @@ class MainWindow(QMainWindow):
         )
 
     def indexing_stop(self):
-        self.index_worker.terminate()
+        """停止索引"""
+        if hasattr(self, 'index_worker') and self.index_worker:
+            self.index_worker.stop()
+            self._show_status_bar_message("索引已停止", 3000)
+
+    def refresh_stop(self):
+        """停止刷新索引"""
+        if hasattr(self, 'refresh_worker') and self.refresh_worker:
+            self.refresh_worker.stop()
+            self._show_status_bar_message("刷新索引已停止", 3000)
 
     def perform_text_search(self):
         """执行文本搜索"""

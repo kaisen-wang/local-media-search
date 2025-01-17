@@ -30,7 +30,9 @@ class FeatureExtractor:
                 MODEL_NAME,
                 cache_dir=CACHE_DIR,
                 local_files_only=True,
-                trust_remote_code=True
+                trust_remote_code=True,
+                image_mean=[0.48145466, 0.4578275, 0.40821073],
+                image_std=[0.26862954, 0.26130258, 0.27577711]
             )
             
             self.model = ChineseCLIPModel.from_pretrained(
@@ -53,10 +55,17 @@ class FeatureExtractor:
 
     def extract_image_features(self, image_path: str) -> np.ndarray:
         """使用ChineseCLIP从图片文件提取特征"""
+        if not image_path:
+            log.error("图像路径为空")
+            return None
         try:
             # 加载图片
             image = Image.open(image_path).convert('RGB')
             
+            if not image:
+                log.error("无法加载图像 image_path:", image_path)
+                return None
+
             # 使用processor处理图片
             inputs = self.processor(
                 images=image,
@@ -68,7 +77,7 @@ class FeatureExtractor:
             with torch.no_grad():
                 image_features = self.model.get_image_features(**inputs)
                 # 归一化
-                image_features = image_features / image_features.norm(dim=-1, keepdim=True)
+                image_features = image_features / image_features.norm(p=2, dim=-1, keepdim=True)
             
             return image_features.cpu().numpy()[0]
             
@@ -100,9 +109,8 @@ class FeatureExtractor:
                 # 提取文本特征
                 text_features = self.model.get_text_features(**inputs)
                 # 归一化
-                text_features = text_features / text_features.norm(dim=-1, keepdim=True)
+                text_features = text_features / text_features.norm(p=2, dim=-1, keepdim=True)
             
-            log.info("Text features extracted successfully")
             return text_features.numpy()[0]
             
         except Exception as e:
@@ -171,4 +179,3 @@ class FeatureExtractor:
             log.error("Error message: ", e)
             log.error("==================================")
             return 0.0
-

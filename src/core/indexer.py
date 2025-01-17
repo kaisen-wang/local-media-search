@@ -56,7 +56,7 @@ class Indexer:
     def _index_image(self, file_path: str) -> bool:
         """索引图片文件"""
         try:
-            log.info(f"=== 图片索引: {file_path} ===")
+            log.debug(f"=== 图片索引: {file_path} ===")
             features = FeatureExtractor().extract_image_features(file_path)
             
             if features is not None:
@@ -69,8 +69,6 @@ class Indexer:
                     log.warning(f"无效的特征形状: {features.shape}")
                     return False
                 
-                log.info(f"特征向量形状: {features.shape}")
-
                 # 将特征向量转换为列表并保存
                 MediaFileDao.add_media_file(
                     file_path=file_path,
@@ -78,7 +76,7 @@ class Indexer:
                     feature_list=features.tolist()
                 )
 
-                log.info(f"成功索引图像: {file_path}")
+                log.debug(f"成功索引图像: {file_path}")
                 return True
                 
             else:
@@ -92,7 +90,7 @@ class Indexer:
     def _index_video(self, file_path: str) -> bool:
         """索引视频文件"""
         try:
-            log.info(f"=== 索引视频文件路径: {file_path} ===")
+            log.debug(f"=== 索引视频文件路径: {file_path} ===")
             cap = cv2.VideoCapture(file_path)
             if not cap.isOpened():
                 log.warning(f"无法打开视频文件: {file_path}")
@@ -132,7 +130,7 @@ class Indexer:
                 frames_dir = os.path.join(CACHE_DIR, 'video_frames', str(media_file.id))
                 os.makedirs(frames_dir, exist_ok=True)
 
-                log.info(f"创建帧保存目录 frames_dir: {frames_dir}")
+                log.debug(f"创建帧保存目录 frames_dir: {frames_dir}")
 
                 while True:
                     ret, frame = cap.read()
@@ -184,7 +182,7 @@ class Indexer:
                     log.warning(f"No frames were successfully processed for {file_path}")
                     return False
 
-                log.info(f"成功索引视频 {file_path} 共获取 {successful_frames} 帧")
+                log.debug(f"成功索引视频 {file_path} 共获取 {successful_frames} 帧")
                 return True
 
             except Exception as e:

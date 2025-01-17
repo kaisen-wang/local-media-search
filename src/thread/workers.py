@@ -17,6 +17,8 @@ class IndexingWorker(QThread):
         super().__init__()
         self.indexer = indexer
         self.folder = folder
+        self._stop_flag = False
+
     def run(self):
         try:
             # 添加索引路径
@@ -34,6 +36,13 @@ class IndexingWorker(QThread):
             with concurrent.futures.ThreadPoolExecutor(thread_name_prefix='IndexingWorker') as executor:
                 futures = {executor.submit(self.indexer.index_single_file, file_path): file_path for file_path in media_files}
                 for i, future in enumerate(concurrent.futures.as_completed(futures), 1):
+                    # 检查停止标志
+                    if self._stop_flag:
+                        # 取消未完成的任务
+                        for f in futures:
+                            f.cancel()
+                        break
+                    
                     file_path = futures[future]
                     try:
                         if future.result():
@@ -44,10 +53,14 @@ class IndexingWorker(QThread):
                     # 发送进度信号
                     self.progress.emit(i, total_files)
 
-            self.finished.emit(indexed_files)
-
+            if not self._stop_flag:
+                self.finished.emit(indexed_files)
         except Exception as e:
             self.error.emit(str(e))
+ 
+    def stop(self):
+        """停止索引"""
+        self._stop_flag = True
 
 class RefreshWorker(QThread):
     """后台刷新线程"""
@@ -59,6 +72,7 @@ class RefreshWorker(QThread):
         super().__init__()
         self.indexer = indexer
         self.folders = folders
+        self._stop_flag = False
 
     def run(self):
         try:
@@ -69,6 +83,8 @@ class RefreshWorker(QThread):
             }
             
             for folder in self.folders:
+                if self._stop_flag:
+                    break
                 # 获取文件夹中的所有文件
                 current_files = set(FileScanner.scan_directory(folder))
                 # 获取数据库中该文件夹的所有文件
@@ -103,9 +119,15 @@ class RefreshWorker(QThread):
                         stats['added'] += 1
                     self.progress.emit(folder, i, total_files)
 
-            self.finished.emit(stats)
+            if not self._stop_flag:
+                self.finished.emit(stats)
         except Exception as e:
+            log.error("刷新索引异常", e)
             self.error.emit(str(e))
+
+    def stop(self):
+        """停止索引"""
+        self._stop_flag = True
 
 class SearchWorker(QThread):
     """后台搜索线程"""

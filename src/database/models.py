@@ -168,10 +168,12 @@ class MediaFileDao:
         cursor = conn.cursor()
         try:
             cursor.execute("SELECT COUNT(*) FROM media_files WHERE file_path = ?", (file_path,))
-            count = cursor.fetchone()[0]
-            return count > 0
+            count = cursor.fetchone()
+            if count is None:
+                return False
+            return count[0] > 0
         except Exception as e:
-            log.error("Error checking if file is indexed: %s", str(e))
+            log.error("检查文件是否已编入索引时出错: %s", str(e))
         finally:
             cursor.close()
         return False
