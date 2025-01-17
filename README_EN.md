@@ -83,9 +83,7 @@ mkdir -p ./models
    - Ensure the following essential files are downloaded:
      - config.json
      - pytorch_model.bin
-     - tokenizer.json
-     - tokenizer_config.json
-     - vocab.txt
+     - clip_cn_vit-b-16.pt
 
 3. Directory structure should be:
 ```
@@ -93,9 +91,7 @@ mkdir -p ./models
 └── chinese-clip-vit-base-patch16/
     ├── config.json
     ├── pytorch_model.bin
-    ├── tokenizer.json
-    ├── tokenizer_config.json
-    └── vocab.txt
+    └── clip_cn_vit-b-16.pt
 ```
 
 ### FAQ

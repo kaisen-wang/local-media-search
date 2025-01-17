@@ -71,7 +71,6 @@ class RefreshWorker(QThread):
             for folder in self.folders:
                 # 获取文件夹中的所有文件
                 current_files = set(FileScanner.scan_directory(folder))
-                    
                 # 获取数据库中该文件夹的所有文件
                 db_files = set(MediaFileDao.get_media_files_by_folder(folder))
                     
@@ -79,11 +78,8 @@ class RefreshWorker(QThread):
                 files_to_add = current_files - db_files
                 files_to_remove = db_files - current_files
                 
-                # if not files_to_add and not files_to_remove:
-                #     continue
-                log.info(f"正在刷新文件夹 {folder}，新增文件数：{len(files_to_add)}, 删除文件数：{len(files_to_remove)}")
-                log.info(f'新增文件: {'\n'.join(files_to_add)}')
-                log.info(f'删除文件: {'\n'.join(files_to_remove)}')
+                if (not files_to_add and not files_to_remove) or (len(files_to_add) == 0 and len(files_to_remove) == 0):
+                    continue
 
                 # 删除不存在的文件记录
                 for file_path in files_to_remove:

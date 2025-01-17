@@ -83,9 +83,7 @@ mkdir -p ./models
    - 确保下载以下必要文件：
      - config.json
      - pytorch_model.bin
-     - tokenizer.json
-     - tokenizer_config.json
-     - vocab.txt
+     - clip_cn_vit-b-16.pt
 
 3. 目录结构应如下：
 ```
@@ -93,9 +91,7 @@ mkdir -p ./models
 └── chinese-clip-vit-base-patch16/
     ├── config.json
     ├── pytorch_model.bin
-    ├── tokenizer.json
-    ├── tokenizer_config.json
-    └── vocab.txt
+    └── clip_cn_vit-b-16.pt
 ```
 
 ### 常见问题

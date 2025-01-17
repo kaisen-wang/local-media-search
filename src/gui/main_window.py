@@ -144,24 +144,32 @@ class MainWindow(QMainWindow):
         
         # 添加文件夹列表
         list_widget = QListWidget()
+        list_widget.setContentsMargins(10, 10, 10, 10)  # 增加内边距
+        list_widget.setStyleSheet("QListWidget::item { height: 50px; }")  # 设置行高度
         for folder in sorted(self.indexed_folders):
-            item = QListWidgetItem(folder)
+            item = QListWidgetItem()
             list_widget.addItem(item)
-            
-            # 创建刷新按钮
-            refresh_btn = QPushButton("刷新")
-            refresh_btn.clicked.connect(lambda checked, f=folder: self.refresh_folder(f))
-            
+        
             # 创建布局并添加按钮
             item_widget = QWidget()
             item_layout = QHBoxLayout()
-            item_layout.addWidget(QLabel(folder))
+
+            # 设置 QLabel
+            folder_label = QLabel(folder)
+            folder_label.setWordWrap(True)  # 允许文字换行
+            item_layout.addWidget(folder_label)
+
+            # 设置 QPushButton
+            refresh_btn = QPushButton("刷新")
+            refresh_btn.setFixedWidth(50)
+            refresh_btn.clicked.connect(lambda checked, f=folder: self.refresh_folder(f))
             item_layout.addWidget(refresh_btn)
-            # item_layout.setContentsMargins(0, 0, 0, 0)
+
+            item_layout.setContentsMargins(10, 10, 10, 10)  # 增加内边距
             item_widget.setLayout(item_layout)
             
             list_widget.setItemWidget(item, item_widget)
-        
+    
         layout.addWidget(list_widget)
 
         # 添加关闭按钮
@@ -171,6 +179,20 @@ class MainWindow(QMainWindow):
         
         dialog.setLayout(layout)
         dialog.exec()
+
+    def refresh_folder(self, folder):
+        """指定文件夹刷新"""
+        log.info(f"刷新文件夹: {folder}")
+        reply = QMessageBox.question(
+            self,
+            '提示',
+            f'是否要刷新索引文件夹？\n这将重新扫描文件夹中的变化。',
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
+        if reply == QMessageBox.StandardButton.Yes:
+            self.indexed_folders = [folder]
+            self.refresh_indexe_folders()
+
 
     def create_results_area(self):
         """创建优化的结果显示区域"""
@@ -215,40 +237,42 @@ class MainWindow(QMainWindow):
 
     def refresh_indexes(self):
         """刷新所有已索引文件夹"""
-        self.load_indexed_folders()
-        
-        if not self.indexed_folders:
-            QMessageBox.information(self, "提示", "没有已索引的文件夹")
-            return
-            
         reply = QMessageBox.question(
             self,
-            '确认',
+            '提示',
             f'是否要刷新所有已索引文件夹？\n这将重新扫描所有文件夹中的变化。',
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
         )
-        
         if reply == QMessageBox.StandardButton.Yes:
-            # 创建进度对话框
-            self.progress_dialog = QProgressDialog(
-                "正在刷新索引...", 
-                "取消", 
-                0, 
-                len(self.indexed_folders), 
-                self
-            )
-            self.progress_dialog.setWindowModality(Qt.WindowModality.WindowModal)
-            self.progress_dialog.setAutoClose(True)
-            self.progress_dialog.setAutoReset(True)
-            
-            # 创建工作线程处理所有文件夹
-            self.refresh_worker = RefreshWorker(self.indexer, list(self.indexed_folders))
-            self.refresh_worker.progress.connect(self.update_refresh_progress)
-            self.refresh_worker.finished.connect(self.refresh_finished)
-            self.refresh_worker.error.connect(self.indexing_error)
-            
-            self.progress_dialog.show()
-            self.refresh_worker.start()
+            self.load_indexed_folders()
+            self.refresh_indexe_folders()
+
+    def refresh_indexe_folders(self):
+        """刷新所有已索引文件夹"""
+        # 创建进度对话框
+        if not self.indexed_folders or len(self.indexed_folders) == 0:
+            QMessageBox.information(self, "提示", "没有已索引的文件夹")
+            return
+        
+        self.progress_dialog = QProgressDialog(
+            "正在刷新索引...", 
+            "取消", 
+            0, 
+            len(self.indexed_folders), 
+            self
+        )
+        self.progress_dialog.setWindowModality(Qt.WindowModality.WindowModal)
+        self.progress_dialog.setAutoClose(True)
+        self.progress_dialog.setAutoReset(True)
+        
+        # 创建工作线程处理所有文件夹
+        self.refresh_worker = RefreshWorker(self.indexer, list(self.indexed_folders))
+        self.refresh_worker.progress.connect(self.update_refresh_progress)
+        self.refresh_worker.finished.connect(self.refresh_finished)
+        self.refresh_worker.error.connect(self.indexing_error)
+        
+        self.progress_dialog.show()
+        self.refresh_worker.start()
 
     def update_refresh_progress(self, current_folder, current, total):
         """更新刷新进度"""
@@ -666,17 +690,3 @@ class MainWindow(QMainWindow):
             os.system(f'open -R "{video_path}"')
         else:
             raise ValueError("Unsupported OS")
-
-
-    # 添加刷新已索引文件夹的方法
-    def refresh_indexed_folders(self):
-        self.load_indexed_folders()
-        list_widget = self.findChild(QListWidget)
-        if list_widget:
-            list_widget.clear()
-            list_widget.addItems(sorted(self.indexed_folders))
-
-    def refresh_folder(self, folder):
-        # 刷新指定文件夹的逻辑
-        print(f"Refreshing folder: {folder}")
-        # 这里可以添加具体的刷新逻辑
