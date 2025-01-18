@@ -22,6 +22,7 @@ class IndexingWorker(QThread):
 
     def run(self):
         try:
+            self._stop_flag = False
             # 添加索引路径
             FilePathDao.add_file_path(self.folder)
 
@@ -84,6 +85,7 @@ class RefreshWorker(QThread):
                 'updated': 0,  # 更新文件数
                 'removed': 0   # 删除文件数
             }
+            self._stop_flag = False
             
             for folder in self.folders:
                 if self._stop_flag:
@@ -92,13 +94,16 @@ class RefreshWorker(QThread):
                 current_files = set(FileScanner.scan_directory(folder))
                 # 获取数据库中该文件夹的所有文件
                 db_files = set(MediaFileDao.get_media_files_by_folder(folder))
-                    
+                
                 # 计算需要添加、删除的文件
                 files_to_add = current_files - db_files
                 files_to_remove = db_files - current_files
                 
                 if (not files_to_add and not files_to_remove) or (len(files_to_add) == 0 and len(files_to_remove) == 0):
                     continue
+
+                if self._stop_flag:
+                    break
 
                 # 删除不存在的文件记录
                 for file_path in files_to_remove:
