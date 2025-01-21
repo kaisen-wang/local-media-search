@@ -9,13 +9,13 @@ SYSTEM = platform.system().lower()
 
 # 使用 Nuitka 打包命令
 # windows 打包
-# python -m nuitka --standalone --onefile --mingw64 --disable-console --windows-disable-console --show-progress --show-memory --assume-yes-for-downloads --enable-plugin="pyqt6" --product-version="1.2" --file-version="1.2" --windows-icon-from-ico="resources/logo.ico" --output-dir="dist" --output-filename="local-media-search" --main="main.py"
+# python -m nuitka --standalone --onefile --mingw64 --disable-console --windows-disable-console --show-progress --show-memory --assume-yes-for-downloads --enable-plugin="pyqt6" --product-version="1.2" --file-version="1.2" --windows-icon-from-ico="resources/logo.ico" --output-dir="dist" --output-filename="local-media-search" main.py
 
 # liunx 打包
-# python -m nuitka --standalone --onefile --disable-console --windows-disable-console --show-progress --show-memory --assume-yes-for-downloads --enable-plugin="pyqt6" --product-version="1.2" --file-version="1.2" --linux-icon="resources/logo.ico" --output-dir="dist" --output-filename="local-media-search" --main="main.py"
+# python -m nuitka --standalone --onefile --disable-console --windows-disable-console --show-progress --show-memory --assume-yes-for-downloads --enable-plugin="pyqt6" --product-version="1.2" --file-version="1.2" --linux-icon="resources/logo.ico" --output-dir="dist" --output-filename="local-media-search" main.py
 
 # mac 打包
-# python -m nuitka --standalone --onefile --disable-console --windows-disable-console --show-progress --show-memory --assume-yes-for-downloads --macos-create-app-bundle --macos-app-mode="gui" --enable-plugin="pyqt6" --product-version="1.2" --file-version="1.2" --macos-app-version="1.2" --macos-app-icon="resources/logo.ico" --macos-app-name="local-media-search" --output-dir="dist" --output-filename="local-media-search" --main="main.py"
+# python -m nuitka --standalone --onefile --disable-console --windows-disable-console --show-progress --show-memory --assume-yes-for-downloads --macos-create-app-bundle --macos-app-mode="gui" --enable-plugin="pyqt6" --product-version="1.2" --file-version="1.2" --macos-app-version="1.2" --macos-app-icon="resources/logo.ico" --macos-app-name="local-media-search" --output-dir="dist" --output-filename="local-media-search" main.py
 
 
 def install_requirements():

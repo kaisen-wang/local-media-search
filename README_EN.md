@@ -52,10 +52,15 @@ LocalMediaSearch is a cross-platform (Windows, macOS, Linux) local media file se
    - Click "Add Index Folder" to configure folders to index
    - Wait for system to complete initial indexing
    
+   ![](./resources/1.png)  
+   ![](./resources/2.png)  
+
 2. Search Operations
    - Text Search: Enter keywords directly in search box
    - Image Search: Click image icon to upload reference image
    - View search results, supports preview and opening original file location
+
+   ![](./resources/3.png)  
 
 ## Development Roadmap
 - [X] v1.0: Basic search functionality
