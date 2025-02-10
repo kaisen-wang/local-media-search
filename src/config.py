@@ -16,7 +16,7 @@ def get_path(path_str: str) -> str:
 # 检测CUDA可用性
 def get_device():
     if torch.cuda.is_available() and torch.version.cuda is not None:
-        return 'cuda'
+        return 'cuda:0'
     else:
         print("CUDA not available or torch not compiled with CUDA, using CPU instead")
         return 'cpu'

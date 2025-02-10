@@ -95,15 +95,15 @@ class FeatureExtractor:
                 padding=True,
                 truncation=True,
                 max_length=77
-            )
+            ).to(DEVICE)
             
             with torch.no_grad():
                 # 提取文本特征
                 text_features = self.model.get_text_features(**inputs)
                 # 归一化
-                text_features = text_features / text_features.norm(p=2, dim=-1, keepdim=True)
+                text_features = text_features / text_features.norm(dim=-1, keepdim=True)
             
-            return text_features.numpy()[0]
+            return text_features.cpu().numpy()[0]
             
         except Exception as e:
             log.exception("文本提取特征错误")

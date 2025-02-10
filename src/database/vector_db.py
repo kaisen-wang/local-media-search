@@ -22,7 +22,7 @@ class VectorDB:
         # "cosine"：余弦相似度（默认）
         # "l2"：欧几里得距离
         # "ip"：内积（Inner Product）
-        self.collection = self.client.get_or_create_collection(name='media_search', metadata={"hnsw:space": "l2"})
+        self.collection = self.client.get_or_create_collection(name='media_search', metadata={"hnsw:space": "cosine"})
 
     def add_feature_vector_media_file(self, id: int, file_path: str, file_type: str, feature_list: List[float]) -> None:
         """向集合中添加多个特征向量"""
