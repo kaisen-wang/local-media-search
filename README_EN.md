@@ -1,4 +1,6 @@
-# LocalMediaSearch - Local Media Intelligent Search Tool
+# LocalMediaSearch - Local Media Intelligent Search Too
+
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/kaisen-wang/local-media-search)
 
 ## Project Overview
 LocalMediaSearch is a cross-platform (Windows, macOS, Linux) local media file search tool that supports searching local images and video files through text (Chinese and English) and images. It uses advanced machine learning models for image recognition and feature extraction, allowing users to easily manage and retrieve local media files. CPU is prioritized for computation, but GPU can be used if CUDA is available.
