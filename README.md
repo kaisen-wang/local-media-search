@@ -1,5 +1,7 @@
 # LocalMediaSearch - 本地媒体智能搜索工具
 
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/kaisen-wang/local-media-search)
+
 ## 项目简介
 LocalMediaSearch 是一个跨平台（Windows、macOS、Linux）的本地媒体文件搜索工具，支持通过文字（中文和英文）和图片搜索本地图片和视频文件。使用先进的机器学习模型进行图像识别和特征提取，让用户可以方便地管理和检索本地媒体文件。优先使用CPU进行计算，如果需要使用GPU，请确保CUDA可用。
 
